@@ -1,3 +1,5 @@
+import random
+
 class Client:
     def __init__(self, assign_time, departure_time, demands, value):
         self.assign_time = assign_time
@@ -10,7 +12,13 @@ class Client:
     
     @classmethod
     def from_json_entry(cls, entry):
-        return cls(entry["start_time"] - 100000, entry["end_time"], [entry["cpus"], entry["memory"]], entry["value"])
+        return cls(entry["start_time"], entry["end_time"], [entry["cpus"], entry["memory"]], entry["value"])
+    
+    @classmethod
+    def from_csv_entry(cls, entry, random_demands=False):
+        if random_demands:
+            return cls(int(entry["start_time"]), int(entry["end_time"]), [random.uniform(0.1, 0.5), random.uniform(0.1, 0.5)], int(entry["value"]))
+        return cls(int(entry["start_time"]), int(entry["end_time"]), [float(entry["max_cpus"]), float(entry["max_memory"])], int(entry["value"]))
 
 class Machine:
     def __init__(self, capacities):

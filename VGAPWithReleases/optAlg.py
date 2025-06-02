@@ -5,13 +5,14 @@ if TYPE_CHECKING:
     from members import Client, Machine
 
 class OPTAlg:
-    def __init__(self, machines: List['Machine'], clients: List['Client']):
+    def __init__(self, machines: List['Machine'], clients: List['Client'], time_interval):
         self._machines = machines
         self._clients:List['Client'] = clients
         self._dimension = len(clients[0].demands)
+        self._time_interval = time_interval
 
     def calc_value(self):
-        T = sorted(set(t for c in self._clients for t in range(c.assign_time, c.departure_time, 10000)))
+        T = sorted(set(t for c in self._clients for t in range(c.assign_time, c.departure_time, self._time_interval)))
         prob = LpProblem("MultipleKnapsackWithDepartures", LpMaximize)
 
         x = LpVariable.dicts("x", ((c, s) for c in self._clients for s in self._machines), lowBound=0, upBound=1)

@@ -12,18 +12,18 @@ class OKPDAlgBase:
         self._value = 0
         self._clients: List['Client'] = clients
         self._time_slot_interval = time_slot_interval
-        self._time_slots = self._get_time_slots()
+        self._min_assign_time, self._max_departure_time = self._get_time_slots_edges()
         self._alpha = self._calc_alpha()
         self._theta = self._calc_theta()
-        self._utilization = {m : [[0 for _ in self._time_slots] for _ in range(m.dimensions())] for m in self._machines}
+        self._utilization = {m : [[0 for _ in range(self._min_assign_time, self._max_departure_time, self._time_slot_interval)] for _ in range(m.dimensions())] for m in self._machines}
     
     def _threshold_function(self, z, capacity, slot_duration):
         raise NotImplemented()
     
-    def _get_time_slots(self):
+    def _get_time_slots_edges(self):
         max_departure_time = max([c.departure_time for c in self._clients])
         min_assign_time = min([c.assign_time for c in self._clients])
-        return list(range(min_assign_time, max_departure_time, self._time_slot_interval))
+        return min_assign_time, max_departure_time
 
     def _calc_theta(self):
         theta = None
@@ -42,7 +42,8 @@ class OKPDAlgBase:
         return c_alpha
 
     def _get_client_timeslots(self, client: 'Client'):
-        return range(client.assign_time // self._time_slot_interval, client.departure_time // self._time_slot_interval)
+        return range((client.assign_time - self._min_assign_time) // self._time_slot_interval,
+                     (client.departure_time - self._min_assign_time) // self._time_slot_interval)
     
     def _get_client_slots_duration(self, client: 'Client'):
         return client.departure_time / self._time_slot_interval - client.assign_time / self._time_slot_interval

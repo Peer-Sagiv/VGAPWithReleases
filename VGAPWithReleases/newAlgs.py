@@ -7,18 +7,22 @@ if TYPE_CHECKING:
     from members import Machine, Client
 
 class VGAPWD:
-    def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], alpha = 0.5):
+    def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], alpha = 0.5, step_with_time=False):
         self._history_set = history_set
         self._machines = machines
-        self._clients = clients
+        self._clients: List['Client'] = clients
         self._num_demands = len(clients)
         self._value = 0
         self._dimension = len(clients[0].demands)
         self._alpha = alpha
+        self._max_time_request = self._calc_max_time_request()
+        self._step_with_time = step_with_time
         
+    def _calc_max_time_request(self):
+        return max([c.departure_time - c.assign_time for c in self._clients])
   
     def step(self, client):
-        history_set = random.sample(self._history_set, self._num_demands - 1) + [client]
+        history_set: List['Client'] = random.sample(self._history_set, self._num_demands - 1) + [client]
         for s in self._machines:
             s.flush(client)
         prob = LpProblem("MultipleKnapsackWithDepartures", LpMaximize)
@@ -30,11 +34,10 @@ class VGAPWD:
             prob += lpSum(x[(c, s)] for s in self._machines) <= 1, f"MachineAssignment_{c}"
         for s in self._machines:
             for d in range(self._dimension):
-                prob += lpSum(c.demands[d] * x[(c, s)] for c in history_set) <= s.capacity(d) * self._alpha, f"Capacity_{s}_{d}"
+                prob += lpSum(c.demands[d] * ((c.departure_time - c.assign_time) / self._max_time_request) * x[(c, s)] for c in history_set) <= s.capacity(d) * self._alpha, f"Capacity_{s}_{d}"
         
         prob.solve()
         probs = [(s, x[(client, s)].varValue) for s in self._machines]
-        # import pdb; pdb.set_trace()
         total = sum(p for _, p in probs) if probs else 0
         if total == 0:
             print(f"Customer {client} is unassigned")
