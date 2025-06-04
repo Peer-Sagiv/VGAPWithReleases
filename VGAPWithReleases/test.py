@@ -1,7 +1,8 @@
 import json
+import matplotlib.pyplot as plt
+import shutil
 import csv
-from collections import namedtuple
-
+from pathlib import Path
 from newAlgs import VGAPWD
 from members import Machine, Client
 from OKPDAlgs import WCOAlg, GreedyAlg, Design1Alg, Design2Alg
@@ -9,7 +10,7 @@ from simpleAlgs import FirstFitAlg, BestFitAlg, RandomOrderAlg, WorstFitAlg
 from optAlg import OPTAlg
 
 GOOGLE_CLUSTERS_TIME_INTERVAL = 1000000
-LOAD_RANDOM_DEMANDS = False
+LOAD_RANDOM_DEMANDS = True
 
 # with open("clean_1000_rounds_valued.json") as f:
 #     rounds = json.load(f)
@@ -19,47 +20,106 @@ LOAD_RANDOM_DEMANDS = False
 #     rounds = json.load(f)
 #     HISTORY_SET = [Client.from_json_entry(entry) for entry in rounds] 
 
-with open("first_five_minutes.csv") as f:
-    raw_data = csv.DictReader(f)
-    CLIENTS = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
+def write_values(name, clients):
+    values = [c.to_dict() for c in clients]
+    with open(name, "w") as f:
+        writer = csv.DictWriter(f, values[0].keys())
+        writer.writeheader()
+        writer.writerows(values)
 
-with open("second_five_minutes.csv") as f:
+def save_value(name, value):
+    print(f"Saving the value {value} to {name}")
+    with open(name, "w") as f:
+        f.write(str(value))
+
+# I'm running too many tests in parallel. This is a hacky solution to properly print the results when I want to
+ALL_RESULTS_NAMES = ["Our alg", "Best fit", "First fit", "Worst fit", "Random order fit", "WCO", "Greedy", "Design 1", "Design 2", "OPT"]
+def print_all_results(res_dir="."):
+    curr_dir = Path(res_dir)
+    for name in ALL_RESULTS_NAMES:
+        with open(curr_dir / name) as f:
+            print(f"{name} value is {f.read()}")
+
+
+"""
+Take from random 5 minutes - for an even spread
+"""
+with open("first_five_minutes_random.csv") as f:
     raw_data = csv.DictReader(f)
     HISTORY_SET = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
+    write_values("current_history.csv", HISTORY_SET)
+    
 
-MACHINES = [Machine([1, 1]) for _ in range(1)]
-
-ALG = namedtuple('ALG', ['instance', 'name'])
-
-
-
-alg = VGAPWD(HISTORY_SET, MACHINES, CLIENTS)
-
-
-first_fit = FirstFitAlg(MACHINES, CLIENTS)
-best_fit = BestFitAlg(MACHINES, CLIENTS)
-worst_fit = WorstFitAlg(MACHINES, CLIENTS)
-random_order = RandomOrderAlg(MACHINES, CLIENTS)
-opt_alg = OPTAlg(MACHINES, CLIENTS)
+with open("second_five_minutes_random.csv") as f:
+    raw_data = csv.DictReader(f)
+    CLIENTS = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
+    write_values("current_clients.csv", CLIENTS)
 
 
-wco = WCOAlg(MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
-greedy = GreedyAlg(MACHINES, CLIENTS, 1)
-design1 = Design1Alg(MACHINES, CLIENTS, 1)
-design2 = Design2Alg(MACHINES, CLIENTS, 1)
-opt_alg = OPTAlg(MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
+# """
+# Load from existing random round
+# """
+# with open("current_history.csv") as f:
+#     raw_data = csv.DictReader(f)
+#     HISTORY_SET = [Client.from_presaved_entry(entry) for entry in raw_data]
+    
 
-alg_res = alg.calc_value()
-best_fit_res = best_fit.calc_value()
-first_fit_res = first_fit.calc_value()
-worst_fit_res = worst_fit.calc_value()
-random_res = random_order.calc_value()
+# with open("current_clients.csv") as f:
+#     raw_data = csv.DictReader(f)
+#     CLIENTS = [Client.from_presaved_entry(entry) for entry in raw_data]
 
-wco_res = wco.calc_value()
-greedy_res = greedy.calc_value()
-design_1_res = design1.calc_value()
-design_2_res = design2.calc_value()
 
-opt_res = opt_alg.calc_value()
+def handle_cls_context(cls, name, *args):
+    instance = cls(*args)
+    print(f"Calculating {name}")
+    value = instance.calc_value()
+    save_value(name, value)
+    del instance
+    return value
 
-print(f"OUR - {alg_res}. BEST FIT - {best_fit_res}. FIRST FIT - {first_fit_res}. WORST FIT - {worst_fit_res}. RANOM ORDER - {random_res}. WCO - {wco_res}. GREEDY - {greedy_res}. DESIGN 1 - {design_1_res}. DESIGN 2 - {design_2_res}. OPT - {opt_res}")
+MACHINES = [Machine([1, 1]) for _ in range(2)]
+
+
+
+alg_res = handle_cls_context(VGAPWD, "Our alg", HISTORY_SET, MACHINES, CLIENTS)
+
+
+print("calculating simple")
+best_fit_res = handle_cls_context(BestFitAlg, "Best fit", MACHINES, CLIENTS)
+first_fit_res = handle_cls_context(FirstFitAlg, "First fit", MACHINES, CLIENTS)
+worst_fit_res = handle_cls_context(WorstFitAlg, "Worst fit", MACHINES, CLIENTS)
+random_res = handle_cls_context(RandomOrderAlg, "Random order fit", MACHINES, CLIENTS)
+
+print("calculating OKPD")
+wco_res = handle_cls_context(WCOAlg, "WCO", MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
+greedy_res = handle_cls_context(GreedyAlg, "Greedy", MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
+design_1_res = handle_cls_context(Design1Alg, "Design 1", MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
+design_2_res = handle_cls_context(Design2Alg, "Design 2", MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
+
+print("calculating opt")
+opt_res = handle_cls_context(OPTAlg, "OPT", MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
+
+print_all_results()
+
+
+def move_results_to_dir(dir_name):
+    dir_path = Path(dir_name)
+    dir_path.mkdir(exist_ok=True)
+    for name in ALL_RESULTS_NAMES + ["current_clients.csv", "current_history.csv"]:
+        shutil.move(name, dir_path / name)
+
+
+
+def plot_results(dir_name):
+    dir_path = Path(dir_name)
+    values = []
+    for name in ALL_RESULTS_NAMES:
+        with open(dir_path / name) as f:
+            values.append(float(f.read()))
+    plt.bar(ALL_RESULTS_NAMES, values)
+    plt.xlabel("Alg")
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel("Value")
+    plt.title(f"Comparison of algs - {dir_name}")
+
+    plt.show()

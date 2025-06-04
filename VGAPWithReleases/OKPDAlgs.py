@@ -82,8 +82,9 @@ class OKPDAlgBase:
         self._clients.sort(key=lambda c:c.assign_time)
         for m in self._machines:
             m.clear()
-        for c in self._clients:
+        for i, c in enumerate(self._clients):
             self.step(c)
+            print(f"Finished round {i}")
         return self._value
 
 class GreedyAlg(OKPDAlgBase):

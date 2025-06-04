@@ -46,27 +46,44 @@ MIDWAY_POINT = 900000000
 # remove heavy machiens
 concated_instances = {i: concated_instances[i] for i in concated_instances if concated_instances[i]['max_cpus'] <= 0.5 and concated_instances[i]['max_memory'] <= 0.5 }
 
-first_half =  {i: concated_instances[i] for i in concated_instances if int(concated_instances[i]['end_time']) < MIDWAY_POINT}
+first_half =  {i: concated_instances[i] for i in concated_instances if int(concated_instances[i]['end_time']) <= MIDWAY_POINT}
 second_half = {i: concated_instances[i] for i in concated_instances if int(concated_instances[i]['start_time']) > MIDWAY_POINT}
+
+first_half_values = list(first_half.values())
+second_half_values = list(second_half.values())
+
+first_half_values.sort(key=lambda x: int(x['start_time']))
+second_half_values.sort(key=lambda x: int(x['start_time']))
 
 random_first_half = random.sample(list(first_half.values()), 1000)
 random_second_half = random.sample(list(second_half.values()), 1000)
 
-for inst in random_first_half:
-    inst["value"] = random.randint(1, 100)
+for inst in first_half_values:
+    inst["value"] = random.randint(1, 1000)
 
-for inst in random_second_half:
-    inst["value"] = random.randint(1, 100)
+for inst in second_half_values:
+    inst["value"] = random.randint(1, 1000)
 
 with open("first_five_minutes.csv", "w") as f:
-    writer = csv.DictWriter(f, random_first_half[0].keys())
+    writer = csv.DictWriter(f, first_half_values[0].keys())
+    writer.writeheader()
+    writer.writerows(first_half_values[:1000])
+
+with open("second_five_minutes.csv", "w") as f:
+    writer = csv.DictWriter(f, second_half_values[0].keys())
+    writer.writeheader()
+    writer.writerows(second_half_values[:1000])
+
+with open("first_five_minutes_random.csv", "w") as f:
+    writer = csv.DictWriter(f, first_half_values[0].keys())
     writer.writeheader()
     writer.writerows(random_first_half)
 
-with open("second_five_minutes.csv", "w") as f:
-    writer = csv.DictWriter(f, random_second_half[0].keys())
+with open("second_five_minutes_random.csv", "w") as f:
+    writer = csv.DictWriter(f, second_half_values[0].keys())
     writer.writeheader()
-    writer.writerows(random_second_half)
+    writer.writerows(random_first_half)
+
 
 # Ensure the instances intersect
 def count_intersections(intervals):
@@ -88,3 +105,6 @@ def count_intersections(intervals):
             active -= 1
 
     return intersections
+
+def get_average_duration(demands):
+    return sum([int(v['end_time']) - int(v['start_time']) for v in demands]) / len(demands)

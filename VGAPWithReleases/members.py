@@ -1,4 +1,5 @@
 import random
+import json
 
 class Client:
     def __init__(self, assign_time, departure_time, demands, value):
@@ -17,8 +18,20 @@ class Client:
     @classmethod
     def from_csv_entry(cls, entry, random_demands=False):
         if random_demands:
-            return cls(int(entry["start_time"]), int(entry["end_time"]), [random.uniform(0.1, 0.5), random.uniform(0.1, 0.5)], int(entry["value"]))
+            return cls(int(entry["start_time"]), int(entry["end_time"]), [random.uniform(0.01, 0.5), random.uniform(0.01, 0.5)], int(entry["value"]))
         return cls(int(entry["start_time"]), int(entry["end_time"]), [float(entry["max_cpus"]), float(entry["max_memory"])], int(entry["value"]))
+    
+    @classmethod
+    def from_presaved_entry(cls, entry):
+        return cls(int(entry["start_time"]), int(entry["end_time"]), [float(d) for d in json.loads(entry["demands"])], int(entry["value"]))
+    
+    def to_dict(self):
+        return {
+            "start_time": self.assign_time,
+            "end_time": self.departure_time,
+            "demands": self.demands,
+            "value": self.value
+        }
 
 class Machine:
     def __init__(self, capacities):

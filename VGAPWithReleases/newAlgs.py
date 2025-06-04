@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from members import Machine, Client
 
 class VGAPWD:
-    def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], alpha = 0.5, step_with_time=False):
+    def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], alpha = 0.5):
         self._history_set = history_set
         self._machines = machines
         self._clients: List['Client'] = clients
@@ -16,7 +16,6 @@ class VGAPWD:
         self._dimension = len(clients[0].demands)
         self._alpha = alpha
         self._max_time_request = self._calc_max_time_request()
-        self._step_with_time = step_with_time
         
     def _calc_max_time_request(self):
         return max([c.departure_time - c.assign_time for c in self._clients])
