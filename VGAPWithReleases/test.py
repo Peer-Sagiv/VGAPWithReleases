@@ -3,14 +3,17 @@ import matplotlib.pyplot as plt
 import shutil
 import csv
 from pathlib import Path
-from newAlgs import VGAPWD
+from newAlgs import VGAPWD, VMKPSD
 from members import Machine, Client
 from OKPDAlgs import WCOAlg, GreedyAlg, Design1Alg, Design2Alg
 from simpleAlgs import FirstFitAlg, BestFitAlg, RandomOrderAlg, WorstFitAlg
 from optAlg import OPTAlg
 
-GOOGLE_CLUSTERS_TIME_INTERVAL = 1000000
-LOAD_RANDOM_DEMANDS = True
+from consts import *
+
+GOOGLE_CLUSTERS_TIME_INTERVAL = 1_000_000
+LOAD_RANDOM_DEMANDS = False
+MACHINES = [Machine([1, 1]) for _ in range(2)]
 
 # with open("clean_1000_rounds_valued.json") as f:
 #     rounds = json.load(f)
@@ -33,7 +36,7 @@ def save_value(name, value):
         f.write(str(value))
 
 # I'm running too many tests in parallel. This is a hacky solution to properly print the results when I want to
-ALL_RESULTS_NAMES = ["Our alg", "Best fit", "First fit", "Worst fit", "Random order fit", "WCO", "Greedy", "Design 1", "Design 2", "OPT"]
+ALL_RESULTS_NAMES = ["Our alg", "Best fit", "First fit", "Worst fit", "Random order fit", "WCO", "Greedy", "Design 1", "Design 2", "OPT", "VMKPSD"]
 def print_all_results(res_dir="."):
     curr_dir = Path(res_dir)
     for name in ALL_RESULTS_NAMES:
@@ -41,16 +44,13 @@ def print_all_results(res_dir="."):
             print(f"{name} value is {f.read()}")
 
 
-"""
-Take from random 5 minutes - for an even spread
-"""
-with open("first_five_minutes_random.csv") as f:
+with open(HISTORY_FROM_CLUSTER_A) as f:
     raw_data = csv.DictReader(f)
     HISTORY_SET = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
     write_values("current_history.csv", HISTORY_SET)
     
 
-with open("second_five_minutes_random.csv") as f:
+with open(CLIENTS_FROM_CLUSTER_A) as f:
     raw_data = csv.DictReader(f)
     CLIENTS = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
     write_values("current_clients.csv", CLIENTS)
@@ -77,10 +77,8 @@ def handle_cls_context(cls, name, *args):
     del instance
     return value
 
-MACHINES = [Machine([1, 1]) for _ in range(2)]
 
-
-
+VMKPSD_res = handle_cls_context(VMKPSD, "VMKPSD", HISTORY_SET, MACHINES, CLIENTS)
 alg_res = handle_cls_context(VGAPWD, "Our alg", HISTORY_SET, MACHINES, CLIENTS)
 
 
@@ -120,6 +118,6 @@ def plot_results(dir_name):
     plt.xlabel("Alg")
     plt.xticks(rotation=45, ha='right')
     plt.ylabel("Value")
-    plt.title(f"Comparison of algs - {dir_name}")
+    plt.title(dir_name)
 
     plt.show()

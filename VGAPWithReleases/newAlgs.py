@@ -30,10 +30,10 @@ class VGAPWD:
         prob += lpSum(c.value * x[(c, s)] for c in history_set for s in self._machines)
 
         for c in history_set:
-            prob += lpSum(x[(c, s)] for s in self._machines) <= 1, f"MachineAssignment_{c}"
+            prob += lpSum(x[(c, s)] for s in self._machines) <= 1
         for s in self._machines:
             for d in range(self._dimension):
-                prob += lpSum(c.demands[d] * ((c.departure_time - c.assign_time) / self._max_time_request) * x[(c, s)] for c in history_set) <= s.capacity(d) * self._alpha, f"Capacity_{s}_{d}"
+                prob += lpSum(c.demands[d] * ((c.departure_time - c.assign_time) / self._max_time_request) * x[(c, s)] for c in history_set) <= s.capacity(d) * self._alpha
         
         prob.solve()
         probs = [(s, x[(client, s)].varValue) for s in self._machines]
@@ -60,3 +60,30 @@ class VGAPWD:
             self._history_set.append(c)
             print(f"Finished round {i}")
         return self._value
+
+
+class VMKPSD(VGAPWD):
+    def step(self, client):
+        history_set: List['Client'] = random.sample(self._history_set, self._num_demands - 1) + [client]
+        for s in self._machines:
+            s.flush(client)
+        prob = LpProblem("VectorMultipleKnapsackWithDepartures", LpMaximize)
+
+        x = LpVariable.dicts("y", ((c) for c in history_set), lowBound=0, upBound=1)
+        prob += lpSum(c.value * x[(c)] for c in history_set)
+
+        for d in range(self._dimension):
+            prob += lpSum(c.demands[d] * ((c.departure_time - c.assign_time) / self._max_time_request) * x[(c)] for c in history_set) <= len(self._machines) * self._alpha
+        
+        prob.solve()
+        probability = x[(client)].varValue
+        if probability < random.random():
+            print(f"Customer {client} is unassigned")
+            return
+        for s in self._machines:
+            if s.check_feasible(client):
+                s.assign(client)
+                self._value += client.value
+                print(f"Customer {client} assigned to {s} by randomized rounding")
+                return
+        print(f"Customer {client} is unassigned due to no free machines")

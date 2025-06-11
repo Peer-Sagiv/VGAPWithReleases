@@ -31,7 +31,8 @@ class OKPDAlgBase:
             c_theta = c.value / (sum(c.demands) * ((c.departure_time -  c.assign_time) / self._time_slot_interval))
             if not theta or c_theta > theta:
                 theta = c_theta
-        return c_theta
+        print(f"Theta is {theta}")
+        return theta
 
     def _calc_alpha(self):
         alpha = None
@@ -62,7 +63,7 @@ class OKPDAlgBase:
         utilization = self._utilization[machine]
         for d in range(machine.dimensions()):
             for timeslot in self._get_client_timeslots(client):
-                utilization[d][timeslot] + client.demands[d]
+                utilization[d][timeslot] += client.demands[d]
 
     def step(self, client: 'Client'):
         possible_machines = []

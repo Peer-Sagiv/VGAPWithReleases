@@ -18,8 +18,8 @@ class Client:
     @classmethod
     def from_csv_entry(cls, entry, random_demands=False):
         if random_demands:
-            return cls(int(entry["start_time"]), int(entry["end_time"]), [random.uniform(0.01, 0.5), random.uniform(0.01, 0.5)], int(entry["value"]))
-        return cls(int(entry["start_time"]), int(entry["end_time"]), [float(entry["max_cpus"]), float(entry["max_memory"])], int(entry["value"]))
+            return cls(int(entry["start_time"]), int(entry["end_time"]), [random.uniform(0.01, 0.5), random.uniform(0.01, 0.5)], float(entry["value"]))
+        return cls(int(entry["start_time"]), int(entry["end_time"]), [float(entry["max_cpus"]), float(entry["max_memory"])], float(entry["value"]))
     
     @classmethod
     def from_presaved_entry(cls, entry):
