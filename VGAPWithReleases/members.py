@@ -1,6 +1,9 @@
 import random
 import json
 
+# A real value can't be negative
+UNSATISFIABLE_VALUE = -1337
+
 class Client:
     def __init__(self, assign_time, departure_time, demands, value):
         self.assign_time = assign_time
@@ -10,6 +13,10 @@ class Client:
 
     def value_density(self):
         return self.value / (sum(self.demands) * self.departure_time - self.assign_time)
+    
+    @property
+    def is_satisfible(self):
+        return self.value != UNSATISFIABLE_VALUE
     
     @classmethod
     def from_json_entry(cls, entry):
@@ -24,7 +31,11 @@ class Client:
     @classmethod
     def from_presaved_entry(cls, entry):
         return cls(int(entry["start_time"]), int(entry["end_time"]), [float(d) for d in json.loads(entry["demands"])], int(entry["value"]))
-    
+
+    @classmethod
+    def unsatisfiable_client(cls, dimensions):
+        return cls(0, 1, [100 for _ in range(dimensions)], UNSATISFIABLE_VALUE)
+
     def to_dict(self):
         return {
             "start_time": self.assign_time,

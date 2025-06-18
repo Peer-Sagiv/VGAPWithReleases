@@ -1,3 +1,4 @@
+import os
 import json
 import matplotlib.pyplot as plt
 import shutil
@@ -9,11 +10,14 @@ from OKPDAlgs import WCOAlg, GreedyAlg, Design1Alg, Design2Alg
 from simpleAlgs import FirstFitAlg, BestFitAlg, RandomOrderAlg, WorstFitAlg
 from optAlg import OPTAlg
 
+from parse_raw_data import create_random_test_sample
 from consts import *
 
 GOOGLE_CLUSTERS_TIME_INTERVAL = 1_000_000
 LOAD_RANDOM_DEMANDS = False
-MACHINES = [Machine([1, 1]) for _ in range(2)]
+MACHINES = [Machine([1, 1]) for _ in range(5)]
+OPT_ALG_NAME = "OPT"
+NUM_INTERVALS = 10
 
 # with open("clean_1000_rounds_valued.json") as f:
 #     rounds = json.load(f)
@@ -36,24 +40,12 @@ def save_value(name, value):
         f.write(str(value))
 
 # I'm running too many tests in parallel. This is a hacky solution to properly print the results when I want to
-ALL_RESULTS_NAMES = ["Our alg", "Best fit", "First fit", "Worst fit", "Random order fit", "WCO", "Greedy", "Design 1", "Design 2", "OPT", "VMKPSD"]
+ALL_RESULTS_NAMES = ["Our alg", "Best fit", "First fit", "Worst fit", "Random order fit", "WCO", "Greedy", "Design 1", "Design 2", OPT_ALG_NAME, "VMKPSD"]
 def print_all_results(res_dir="."):
     curr_dir = Path(res_dir)
     for name in ALL_RESULTS_NAMES:
         with open(curr_dir / name) as f:
             print(f"{name} value is {f.read()}")
-
-
-with open(HISTORY_FROM_CLUSTER_A) as f:
-    raw_data = csv.DictReader(f)
-    HISTORY_SET = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
-    write_values("current_history.csv", HISTORY_SET)
-    
-
-with open(CLIENTS_FROM_CLUSTER_A) as f:
-    raw_data = csv.DictReader(f)
-    CLIENTS = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
-    write_values("current_clients.csv", CLIENTS)
 
 
 # """
@@ -78,31 +70,43 @@ def handle_cls_context(cls, name, *args):
     return value
 
 
-VMKPSD_res = handle_cls_context(VMKPSD, "VMKPSD", HISTORY_SET, MACHINES, CLIENTS)
-alg_res = handle_cls_context(VGAPWD, "Our alg", HISTORY_SET, MACHINES, CLIENTS)
+def run_all(history_csv, clients_csv, machines):
+    with open(history_csv) as f:
+        raw_data = csv.DictReader(f)
+        history = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
+        write_values("current_history.csv", history)
+
+    with open(clients_csv) as f:
+        raw_data = csv.DictReader(f)
+        clients = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
+        write_values("current_clients.csv", clients)
+
+    print("Calculating our algs")
+    handle_cls_context(VMKPSD, "VMKPSD", history, machines, clients, NUM_INTERVALS)
+    handle_cls_context(VGAPWD, "Our alg", history, machines, clients, NUM_INTERVALS)
 
 
-print("calculating simple")
-best_fit_res = handle_cls_context(BestFitAlg, "Best fit", MACHINES, CLIENTS)
-first_fit_res = handle_cls_context(FirstFitAlg, "First fit", MACHINES, CLIENTS)
-worst_fit_res = handle_cls_context(WorstFitAlg, "Worst fit", MACHINES, CLIENTS)
-random_res = handle_cls_context(RandomOrderAlg, "Random order fit", MACHINES, CLIENTS)
+    print("calculating simple")
+    handle_cls_context(BestFitAlg, "Best fit", machines, clients)
+    handle_cls_context(FirstFitAlg, "First fit", machines, clients)
+    handle_cls_context(WorstFitAlg, "Worst fit", machines, clients)
+    handle_cls_context(RandomOrderAlg, "Random order fit", machines, clients)
 
-print("calculating OKPD")
-wco_res = handle_cls_context(WCOAlg, "WCO", MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
-greedy_res = handle_cls_context(GreedyAlg, "Greedy", MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
-design_1_res = handle_cls_context(Design1Alg, "Design 1", MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
-design_2_res = handle_cls_context(Design2Alg, "Design 2", MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    print("calculating OKPD")
+    handle_cls_context(WCOAlg, "WCO", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    handle_cls_context(GreedyAlg, "Greedy", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    handle_cls_context(Design1Alg, "Design 1", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    handle_cls_context(Design2Alg, "Design 2", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
 
-print("calculating opt")
-opt_res = handle_cls_context(OPTAlg, "OPT", MACHINES, CLIENTS, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    print("calculating opt")
+    handle_cls_context(OPTAlg, OPT_ALG_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
 
-print_all_results()
+    print_all_results()
 
 
 def move_results_to_dir(dir_name):
     dir_path = Path(dir_name)
-    dir_path.mkdir(exist_ok=True)
+    dir_path.mkdir(exist_ok=True, parents=True)
     for name in ALL_RESULTS_NAMES + ["current_clients.csv", "current_history.csv"]:
         shutil.move(name, dir_path / name)
 
@@ -121,3 +125,56 @@ def plot_results(dir_name):
     plt.title(dir_name)
 
     plt.show()
+
+
+def calc_competative_value(alg_name, base_dir="."):
+    dir_path = Path(base_dir)
+    with open(dir_path / alg_name) as f:
+        alg_res = float(f.read())
+    with open(dir_path / OPT_ALG_NAME) as f:
+        opt_res = float(f.read())
+    return alg_res / opt_res
+
+
+def plot_relative_result(dir_name):
+    values = []
+    for name in ALL_RESULTS_NAMES:
+        values.append(calc_competative_value(name, dir_name))
+    plt.bar(ALL_RESULTS_NAMES, values)
+    plt.xlabel("Alg")
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel("Value")
+    plt.title(dir_name)
+    plt.show()
+
+def calc_average_competative_value(base_dir="."):
+    all_subdirs = []
+    for dirpath, dirnames, _ in os.walk(base_dir):
+        all_subdirs.extend([os.path.join(dirpath, d) for d in dirnames])
+    algs_value = {name: 0 for name in ALL_RESULTS_NAMES}
+    for dir_name in all_subdirs:
+        for name in ALL_RESULTS_NAMES:
+            with open(Path(dir_name) / name) as f:
+                algs_value[name] += float(f.read())
+    return {v : algs_value[v] / algs_value[OPT_ALG_NAME] for v in algs_value}
+
+def plot_average_competative_value(base_dir="."):
+    algs_values = calc_average_competative_value(base_dir)
+    plt.bar(algs_values.keys(), algs_values.values())
+    plt.xlabel("Alg")
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel("Value")
+    plt.title(base_dir)
+    plt.show()
+
+
+def run_test_with_theta(theta):
+    BASE_CLUSTER_A_RES_PATH = Path(".").parent / f"Cluster A - theta {theta} - 300 instances"
+    for i in range(10):
+        print("Creating sample")
+        create_random_test_sample(theta)
+        print("Running sample")
+        run_all(HISTORY_FROM_CLUSTER_A, CLIENTS_FROM_CLUSTER_A, MACHINES)
+        move_results_to_dir(BASE_CLUSTER_A_RES_PATH / f"run_{i}")
+
+run_test_with_theta(10)
