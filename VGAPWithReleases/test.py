@@ -140,11 +140,21 @@ def plot_relative_result(dir_name):
     values = []
     for name in ALL_RESULTS_NAMES:
         values.append(calc_competative_value(name, dir_name))
-    plt.bar(ALL_RESULTS_NAMES, values)
-    plt.xlabel("Alg")
+    bars = plt.bar(ALL_RESULTS_NAMES, values)
     plt.xticks(rotation=45, ha='right')
     plt.ylabel("Value")
     plt.title(dir_name)
+
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            f"{height:.2f}",
+            ha='center', va='bottom'
+        )
+
+    plt.tight_layout()
     plt.show()
 
 def calc_average_competative_value(base_dir="."):
@@ -160,19 +170,29 @@ def calc_average_competative_value(base_dir="."):
 
 def plot_average_competative_value(base_dir="."):
     algs_values = calc_average_competative_value(base_dir)
-    plt.bar(algs_values.keys(), algs_values.values())
-    plt.xlabel("Alg")
+    bars = plt.bar(algs_values.keys(), algs_values.values())
     plt.xticks(rotation=45, ha='right')
     plt.ylabel("Value")
     plt.title(base_dir)
-    plt.show()
 
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            f"{height:.2f}",
+            ha='center', va='bottom'
+        )
+
+    plt.tight_layout()
+    plt.show()
 
 def run_test_with_theta(theta):
     BASE_CLUSTER_A_RES_PATH = Path(".").parent / f"Cluster A - theta {theta} - 300 instances"
     for i in range(10):
         print("Creating sample")
-        create_random_test_sample(theta)
+        while not create_random_test_sample(theta):
+            print("Sample size too small. Creating new sample")
         print("Running sample")
         run_all(HISTORY_FROM_CLUSTER_A, CLIENTS_FROM_CLUSTER_A, MACHINES)
         move_results_to_dir(BASE_CLUSTER_A_RES_PATH / f"run_{i}")

@@ -3,20 +3,6 @@ import random
 from collections import defaultdict
 from consts import *
 
-A_RUNS = "runs_from_cluster_a.csv"
-H_RUNS = "cluster_h_first10min.csv"
-THETA = 50
-
-SECOND = 1_000
-
-GOOGLE_CLUSTERS_TIME_INTERVAL = 1_000_000
-REQUIRED_INTERVAL = 10 * GOOGLE_CLUSTERS_TIME_INTERVAL
-
-QUERY_START_TIME = 1200_000_000
-QUERY_END_TIME = 1500_000_000
-# Allow an extra interval to be taken
-MAX_QUERY_INTERVAL = ((QUERY_END_TIME - QUERY_START_TIME) // GOOGLE_CLUSTERS_TIME_INTERVAL) - 1
-
 def get_concated_instance(inst):
     inst.sort(key=lambda x: int(x['start_time']))
     ordered_inst = {}
@@ -88,7 +74,7 @@ def get_average_duration(demands):
     return sum([int(v['end_time']) - int(v['start_time']) for v in demands]) / len(demands)
 
 def create_random_test_sample(theta):
-    with open(A_RUNS) as f:
+    with open(COMBINED_A_RUNS) as f:
         raw_data = csv.DictReader(f)
         parsed_data = [row for row in raw_data]
 
@@ -105,16 +91,19 @@ def create_random_test_sample(theta):
             concated_instances[raw_instance_key] = ordered_intance
 
     # Select a random time to derive the history and online set from
-    current_query_time = random.randint(0, MAX_QUERY_INTERVAL) * GOOGLE_CLUSTERS_TIME_INTERVAL + QUERY_START_TIME
+    current_query_time = random.randint(1, MAX_QUERY_INTERVAL) * GOOGLE_CLUSTERS_TIME_INTERVAL + QUERY_START_TIME
 
     # remove heavy machiens
     concated_instances = {i: concated_instances[i] for i in concated_instances if concated_instances[i]['max_cpus'] <= 0.5 and concated_instances[i]['max_memory'] <= 0.5}
 
-    first_interval = {i: concated_instances[i] for i in concated_instances if current_query_time <= int(concated_instances[i]['start_time']) <= current_query_time + REQUIRED_INTERVAL}
-    second_interval = {i: concated_instances[i] for i in concated_instances if current_query_time + REQUIRED_INTERVAL <= int(concated_instances[i]['start_time']) <= current_query_time + REQUIRED_INTERVAL * 2}
+    first_interval = {i: concated_instances[i] for i in concated_instances if current_query_time <= int(concated_instances[i]['start_time']) < current_query_time + REQUIRED_INTERVAL}
+    second_interval = {i: concated_instances[i] for i in concated_instances if current_query_time + REQUIRED_INTERVAL <= int(concated_instances[i]['start_time']) < current_query_time + REQUIRED_INTERVAL * 2}
 
     first_interval_values = list(first_interval.values())
     second_interval_values = list(second_interval.values())
+
+    if len(first_interval_values) < MIN_SAMPLE_SIZE or len(second_interval_values) < MIN_SAMPLE_SIZE:
+        return False 
 
     first_interval_values.sort(key=lambda x: int(x['start_time']))
     second_interval_values.sort(key=lambda x: int(x['start_time']))
@@ -142,3 +131,4 @@ def create_random_test_sample(theta):
         writer.writeheader()
         writer.writerows(online_set)
 
+    return True

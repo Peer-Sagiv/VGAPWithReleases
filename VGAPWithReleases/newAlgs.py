@@ -3,40 +3,50 @@ import random
 from typing import List
 from pulp import *
 from members import Machine, Client
+from consts import *
 
+SLOTS = 1000
 class VGAPWD:
     def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], num_intervals, alpha = 0.5):
-        self._slot_count = 1000
-        self._clients: List['Client'] = [copy.deepcopy(c) for c in clients]
+        self._slot_count = SLOTS
+        self._clients: List['Client'] = copy.deepcopy(clients)
         self._current_clients_in_interval = []
-        self._history_set = [copy.deepcopy(h) for h in history_set]
+        self._history_set = copy.deepcopy(history_set)
         self._dimension = len(clients[0].demands)
         self._num_intervals = num_intervals
         self._machines = machines
-        self._current_assign_time = min(client.assign_time for client in self._clients)
+        self._current_assign_time = min(client.assign_time for client in self._clients) - 1
         self._value = 0
         self._alpha = alpha
-        self._max_time_request = self._calc_max_time_request()
+        self._max_time_request = num_intervals * GOOGLE_CLUSTERS_TIME_INTERVAL
+        self._current_index = 0
+        self._current_random_index = 0
         self._pre_process_data()
 
     def _pre_process_data(self):
         self._history_set += [Client.unsatisfiable_client(self._dimension) for _ in range(self._slot_count * self._num_intervals - len(self._history_set))]
 
-    def _calc_max_time_request(self):
-        return max([c.departure_time - c.assign_time for c in self._clients])
-    
     def _get_history_set(self):
+        # print(f"History set size is {len(self._history_set)}")
         chosen_history: List['Client'] = random.sample(self._history_set, self._num_intervals * self._slot_count)
         return [h for h in chosen_history if h.is_satisfible]
     
     def _pre_step_update_history(self, client: 'Client'):
         if client.assign_time > self._current_assign_time:
+            # print("Creating new set of dummies")
             self._current_assign_time = client.assign_time
-            self._history_set += self._current_clients_in_interval
-            self._history_set += [Client.unsatisfiable_client(self._dimension) for _ in range(self._slot_count * self._num_intervals - len(self._current_clients_in_interval))]
-            self._current_clients_in_interval = []
-        else:
-            self._current_clients_in_interval.append(client)
+            self._current_clients_in_interval = [c for c in self._clients if c.assign_time == self._current_assign_time]
+            self._random_sample_for_current_interval = random.sample(range(SLOTS), len(self._current_clients_in_interval))
+            self._random_sample_for_current_interval.sort()
+            self._current_index = 0
+            self._current_random_index = 0
+        
+        prev_random_index = self._current_random_index
+        self._current_random_index = self._random_sample_for_current_interval[self._current_index]
+        self._current_index += 1
+        number_of_dummies = self._current_random_index - prev_random_index
+        # print(f"Number of dummies is {number_of_dummies}")
+        self._history_set += [Client.unsatisfiable_client(self._dimension) for _ in range(number_of_dummies)]
 
     def step(self, client):
         self._pre_step_update_history(client)
@@ -54,7 +64,7 @@ class VGAPWD:
             for d in range(self._dimension):
                 prob += lpSum(c.demands[d] * ((c.departure_time - c.assign_time) / self._max_time_request) * x[(c, s)] for c in history_set) <= s.capacity(d) * self._alpha
 
-        prob.solve()
+        prob.solve(PULP_CBC_CMD(msg=0))
         probs = [(s, x[(client, s)].varValue) for s in self._machines]
         total = sum(p for _, p in probs) if probs else 0
         if total == 0:
@@ -76,7 +86,6 @@ class VGAPWD:
         self._clients.sort(key=lambda c:c.assign_time)
         for i, c in enumerate(self._clients):
             self.step(c)
-            self._history_set.append(c)
             print(f"Finished round {i}")
         return self._value
 
@@ -95,7 +104,7 @@ class VMKPSD(VGAPWD):
         for d in range(self._dimension):
             prob += lpSum(c.demands[d] * ((c.departure_time - c.assign_time) / self._max_time_request) * x[(c)] for c in history_set) <= len(self._machines)
         
-        prob.solve()
+        prob.solve(PULP_CBC_CMD(msg=0))
         probability = x[(client)].varValue
         if probability < random.random():
             print(f"Customer {client} is unassigned")

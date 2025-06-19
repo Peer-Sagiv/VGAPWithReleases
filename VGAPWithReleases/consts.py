@@ -1,2 +1,18 @@
 HISTORY_FROM_CLUSTER_A = "history_cluster_a.csv"
 CLIENTS_FROM_CLUSTER_A = "clients_cluster_a.csv"
+
+A_RUNS = "runs_from_cluster_a.csv"
+COMBINED_A_RUNS = "runs_from_cluster_a_combined.csv"
+H_RUNS = "cluster_h_first10min.csv"
+THETA = 50
+
+MIN_SAMPLE_SIZE = 800
+SECOND = 1_000
+
+GOOGLE_CLUSTERS_TIME_INTERVAL = 1_000_000
+REQUIRED_INTERVAL = 10 * GOOGLE_CLUSTERS_TIME_INTERVAL
+
+QUERY_START_TIME = 1200_000_000
+QUERY_END_TIME = 1500_000_000
+# Allow an extra interval to be taken
+MAX_QUERY_INTERVAL = ((QUERY_END_TIME - QUERY_START_TIME) // GOOGLE_CLUSTERS_TIME_INTERVAL) - 1
