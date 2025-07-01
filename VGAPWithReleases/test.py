@@ -6,7 +6,7 @@ import csv
 from pathlib import Path
 from newAlgs import VGAPWD, VMKPSD
 from members import Machine, Client
-from OKPDAlgs import WCOAlg, GreedyAlg, Design1Alg, Design2Alg, DataDrivenAlg
+from OKPDAlgs import WCOAlg, GreedyAlg, Design1Alg, Design2Alg, DataDrivenAlg, GammaOfflineAlg
 from simpleAlgs import FirstFitAlg, BestFitAlg, RandomOrderAlg, WorstFitAlg
 from optAlg import OPTAlg
 
@@ -40,7 +40,7 @@ def save_value(name, value):
         f.write(str(value))
 
 # I'm running too many tests in parallel. This is a hacky solution to properly print the results when I want to
-ALL_RESULTS_NAMES = ["Our alg", "Best fit", "First fit", "Worst fit", "Random order fit", "WCO", "Greedy", "Design 1", "Design 2", OPT_ALG_NAME, "VMKPSD", "DOA"]
+ALL_RESULTS_NAMES = ["Our alg", "Best fit", "First fit", "Worst fit", "Random order fit", "WCO", "Greedy", "Design 1", "Design 2", OPT_ALG_NAME, "VMKPSD", "DOA", "gamma_offline"]
 def print_all_results(res_dir="."):
     curr_dir = Path(res_dir)
     for name in ALL_RESULTS_NAMES:
@@ -98,6 +98,7 @@ def run_all(history_csv, clients_csv, machines):
     design1_val = handle_cls_context(Design1Alg, "Design 1", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
     design2_val = handle_cls_context(Design2Alg, "Design 2", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
     doa_val = handle_cls_context(DataDrivenAlg, "DOA", machines, clients, history, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    gamma_offline_val = handle_cls_context(GammaOfflineAlg, "gamma_offline", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
 
     print("calculating opt")
     opt_val = handle_cls_context(OPTAlg, OPT_ALG_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)

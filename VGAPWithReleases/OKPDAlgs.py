@@ -137,3 +137,19 @@ class DataDrivenAlg:
                 best_w = w
         best_alg = TailoredOKPDA(self._machines, self._clients, self._time_slot_interval, best_w)
         return best_alg.calc_value()
+    
+class GammaOfflineAlg:
+    def __init__(self, machines:List['Machine'], clients: List['Client'], time_slot_interval):
+        self._w_list = [0.1 * i for i in range(1, 31)]
+        self._machines = machines
+        self._clients = clients
+        self._time_slot_interval = time_slot_interval
+
+    def calc_value(self):
+        best_value = -1
+        for w in self._w_list:
+            curr_alg = TailoredOKPDA(self._machines, self._clients, self._time_slot_interval, w)
+            curr_res = curr_alg.calc_value()
+            if curr_res > best_value:
+                best_value = curr_res
+        return best_value
