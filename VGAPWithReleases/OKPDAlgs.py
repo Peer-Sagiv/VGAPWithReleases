@@ -35,12 +35,16 @@ class OKPDAlgBase:
         return theta
 
     def _calc_alpha(self):
-        alpha = None
+        max_alpha = -1
+        min_alpha = None
         for c in self._clients:
             c_alpha = (c.departure_time -  c.assign_time) / self._time_slot_interval
-            if not alpha or c_alpha > alpha:
-                alpha = c_alpha
-        return c_alpha
+            max_alpha = max(max_alpha, c_alpha)
+            if min_alpha is None:
+                min_alpha = c_alpha
+            else:
+                min_alpha = min(min_alpha, c_alpha)
+        return max_alpha / min_alpha
 
     def _get_client_timeslots(self, client: 'Client'):
         return range((client.assign_time - self._min_assign_time) // self._time_slot_interval,
@@ -104,4 +108,32 @@ class Design2Alg(OKPDAlgBase):
     
 class WCOAlg(OKPDAlgBase):
     def _threshold_function(self, z, capacity, slot_duration):
-        return np.exp(z * np.log(self._alpha * self._theta + 1))
+        return np.exp(z * np.log(self._alpha * self._theta + 1)) - 1
+
+class TailoredOKPDA(OKPDAlgBase):
+    def __init__(self, machines, clients, time_slot_interval, w):
+        super().__init__(machines, clients, time_slot_interval)
+        self._w = w
+
+    def _threshold_function(self, z, capacity, slot_duration):
+        return np.exp((self._w * z) / capacity) - 1
+
+class DataDrivenAlg:
+    def __init__(self, machines:List['Machine'], clients: List['Client'], history: List['Client'], time_slot_interval):
+        self._w_list = [0.1 * i for i in range(1, 31)]
+        self._machines = machines
+        self._clients = clients
+        self._history = history
+        self._time_slot_interval = time_slot_interval
+
+    def calc_value(self):
+        best_value, best_w = -1, None
+        for w in self._w_list:
+            print(f"Calculating DOA with W - {w}")
+            curr_alg = TailoredOKPDA(self._machines, self._history, self._time_slot_interval, w)
+            curr_res = curr_alg.calc_value()
+            if curr_res > best_value:
+                best_value = curr_res
+                best_w = w
+        best_alg = TailoredOKPDA(self._machines, self._clients, self._time_slot_interval, best_w)
+        return best_alg.calc_value()

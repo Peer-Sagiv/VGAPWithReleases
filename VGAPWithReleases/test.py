@@ -6,7 +6,7 @@ import csv
 from pathlib import Path
 from newAlgs import VGAPWD, VMKPSD
 from members import Machine, Client
-from OKPDAlgs import WCOAlg, GreedyAlg, Design1Alg, Design2Alg
+from OKPDAlgs import WCOAlg, GreedyAlg, Design1Alg, Design2Alg, DataDrivenAlg
 from simpleAlgs import FirstFitAlg, BestFitAlg, RandomOrderAlg, WorstFitAlg
 from optAlg import OPTAlg
 
@@ -40,7 +40,7 @@ def save_value(name, value):
         f.write(str(value))
 
 # I'm running too many tests in parallel. This is a hacky solution to properly print the results when I want to
-ALL_RESULTS_NAMES = ["Our alg", "Best fit", "First fit", "Worst fit", "Random order fit", "WCO", "Greedy", "Design 1", "Design 2", OPT_ALG_NAME, "VMKPSD"]
+ALL_RESULTS_NAMES = ["Our alg", "Best fit", "First fit", "Worst fit", "Random order fit", "WCO", "Greedy", "Design 1", "Design 2", OPT_ALG_NAME, "VMKPSD", "DOA"]
 def print_all_results(res_dir="."):
     curr_dir = Path(res_dir)
     for name in ALL_RESULTS_NAMES:
@@ -82,26 +82,28 @@ def run_all(history_csv, clients_csv, machines):
         write_values("current_clients.csv", clients)
 
     print("Calculating our algs")
-    handle_cls_context(VMKPSD, "VMKPSD", history, machines, clients, NUM_INTERVALS)
-    handle_cls_context(VGAPWD, "Our alg", history, machines, clients, NUM_INTERVALS)
+    vgapwd_val = handle_cls_context(VGAPWD, "Our alg", history, machines, clients, NUM_INTERVALS)
+    vmkpsd_val = handle_cls_context(VMKPSD, "VMKPSD", history, machines, clients, NUM_INTERVALS)
 
 
     print("calculating simple")
-    handle_cls_context(BestFitAlg, "Best fit", machines, clients)
-    handle_cls_context(FirstFitAlg, "First fit", machines, clients)
-    handle_cls_context(WorstFitAlg, "Worst fit", machines, clients)
-    handle_cls_context(RandomOrderAlg, "Random order fit", machines, clients)
+    best_fit_val = handle_cls_context(BestFitAlg, "Best fit", machines, clients)
+    first_fit_val = handle_cls_context(FirstFitAlg, "First fit", machines, clients)
+    worst_fit_val = handle_cls_context(WorstFitAlg, "Worst fit", machines, clients)
+    random_order_val = handle_cls_context(RandomOrderAlg, "Random order fit", machines, clients)
 
     print("calculating OKPD")
-    handle_cls_context(WCOAlg, "WCO", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
-    handle_cls_context(GreedyAlg, "Greedy", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
-    handle_cls_context(Design1Alg, "Design 1", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
-    handle_cls_context(Design2Alg, "Design 2", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    wco_val = handle_cls_context(WCOAlg, "WCO", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    greedy_val = handle_cls_context(GreedyAlg, "Greedy", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    design1_val = handle_cls_context(Design1Alg, "Design 1", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    design2_val = handle_cls_context(Design2Alg, "Design 2", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    doa_val = handle_cls_context(DataDrivenAlg, "DOA", machines, clients, history, GOOGLE_CLUSTERS_TIME_INTERVAL)
 
     print("calculating opt")
-    handle_cls_context(OPTAlg, OPT_ALG_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    opt_val = handle_cls_context(OPTAlg, OPT_ALG_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
 
     print_all_results()
+    # return [vmkpsd_val, vgapwd_val, best_fit_val, first_fit_val, worst_fit_val, random_order_val, wco_val, greedy_val, design1_val, desi]
 
 
 def move_results_to_dir(dir_name):
@@ -189,9 +191,9 @@ def plot_average_competative_value(base_dir="."):
 
 def run_test_with_theta(theta):
     BASE_CLUSTER_A_RES_PATH = Path(".").parent / f"Cluster A - theta {theta} - 300 instances"
-    for i in range(10):
+    for i in range(1):
         print("Creating sample")
-        while not create_random_test_sample(theta):
+        while not create_random_test_sample(theta, 10):
             print("Sample size too small. Creating new sample")
         print("Running sample")
         run_all(HISTORY_FROM_CLUSTER_A, CLIENTS_FROM_CLUSTER_A, MACHINES)

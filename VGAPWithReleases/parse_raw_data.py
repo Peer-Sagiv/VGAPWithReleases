@@ -4,23 +4,18 @@ from collections import defaultdict
 from consts import *
 
 def get_concated_instance(inst):
-    inst.sort(key=lambda x: int(x['start_time']))
     ordered_inst = {}
     for key in inst[0]:
         ordered_inst[key] = inst[0][key]
     ordered_inst['max_cpus'] = float(ordered_inst['max_cpus'])
     ordered_inst['max_memory'] = float(ordered_inst['max_memory'])
-    last_entry = inst[0]
+    ordered_inst['start_time'] = int(ordered_inst['start_time'])
+    ordered_inst['end_time'] = int(ordered_inst['end_time'])
     for entry in inst:
-        if entry == last_entry:
-            continue
-        if entry['start_time'] != ordered_inst['end_time']:
-            # We refer to it as a broken entry. Ignore it
-            return None
-        last_entry = entry
-        ordered_inst['end_time'] = entry['end_time']
-        ordered_inst['max_cpus'] = max(float(ordered_inst['max_cpus']), float(entry['max_cpus']))
-        ordered_inst['max_memory'] = max(float(ordered_inst['max_memory']), float(entry['max_memory']))
+        ordered_inst['start_time'] = min(ordered_inst['start_time'], int(entry['start_time']))
+        ordered_inst['end_time'] = max(ordered_inst['end_time'], int(entry['end_time']))
+        ordered_inst['max_cpus'] = max(ordered_inst['max_cpus'], float(entry['max_cpus']))
+        ordered_inst['max_memory'] = max(ordered_inst['max_memory'], float(entry['max_memory']))
     return ordered_inst
 
 
@@ -73,7 +68,10 @@ def count_intersections(intervals):
 def get_average_duration(demands):
     return sum([int(v['end_time']) - int(v['start_time']) for v in demands]) / len(demands)
 
-def create_random_test_sample(theta):
+def create_random_test_sample(theta, required_time):
+    required_interval_time = required_time * GOOGLE_CLUSTERS_TIME_INTERVAL
+    max_query_interval = ((QUERY_END_TIME - QUERY_START_TIME) // GOOGLE_CLUSTERS_TIME_INTERVAL) - 3 * required_time
+
     with open(COMBINED_A_RUNS) as f:
         raw_data = csv.DictReader(f)
         parsed_data = [row for row in raw_data]
@@ -81,7 +79,7 @@ def create_random_test_sample(theta):
     instances = defaultdict(lambda: [])
     for inst in parsed_data:
         if inst['max_cpus'] and float(inst['max_cpus']) > 0 and inst['max_memory'] and float(inst['max_memory']) > 0:
-            instances[inst["instance_index"], inst["collection_id"], inst['machine_id']].append(inst)
+            instances[inst["instance_index"], inst["collection_id"]].append(inst)
 
     concated_instances = {}
     
@@ -91,13 +89,13 @@ def create_random_test_sample(theta):
             concated_instances[raw_instance_key] = ordered_intance
 
     # Select a random time to derive the history and online set from
-    current_query_time = random.randint(1, MAX_QUERY_INTERVAL) * GOOGLE_CLUSTERS_TIME_INTERVAL + QUERY_START_TIME
+    current_query_time = random.randint(1, max_query_interval) * GOOGLE_CLUSTERS_TIME_INTERVAL + QUERY_START_TIME
 
     # remove heavy machiens
     concated_instances = {i: concated_instances[i] for i in concated_instances if concated_instances[i]['max_cpus'] <= 0.5 and concated_instances[i]['max_memory'] <= 0.5}
 
-    first_interval = {i: concated_instances[i] for i in concated_instances if current_query_time <= int(concated_instances[i]['start_time']) < current_query_time + REQUIRED_INTERVAL}
-    second_interval = {i: concated_instances[i] for i in concated_instances if current_query_time + REQUIRED_INTERVAL <= int(concated_instances[i]['start_time']) < current_query_time + REQUIRED_INTERVAL * 2}
+    first_interval = {i: concated_instances[i] for i in concated_instances if current_query_time <= int(concated_instances[i]['start_time']) < current_query_time + required_interval_time}
+    second_interval = {i: concated_instances[i] for i in concated_instances if current_query_time + required_interval_time <= int(concated_instances[i]['start_time']) < current_query_time + required_interval_time * 2}
 
     first_interval_values = list(first_interval.values())
     second_interval_values = list(second_interval.values())
@@ -108,8 +106,8 @@ def create_random_test_sample(theta):
     first_interval_values.sort(key=lambda x: int(x['start_time']))
     second_interval_values.sort(key=lambda x: int(x['start_time']))
 
-    fix_max_end_time(first_interval_values, REQUIRED_INTERVAL)
-    fix_max_end_time(second_interval_values, REQUIRED_INTERVAL)
+    fix_max_end_time(first_interval_values, required_interval_time)
+    fix_max_end_time(second_interval_values, required_interval_time)
 
     # After fixing the times, we are left with assignments which may start and end at the same time. Remove them
     first_interval_values = [value for value in first_interval_values if int(value['start_time']) != int(value['end_time'])]
