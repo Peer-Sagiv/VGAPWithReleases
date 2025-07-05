@@ -2,7 +2,7 @@ HISTORY_FROM_CLUSTER_A = "history_cluster_a.csv"
 CLIENTS_FROM_CLUSTER_A = "clients_cluster_a.csv"
 
 A_RUNS = "runs_from_cluster_a.csv"
-COMBINED_A_RUNS = "runs_from_cluster_a_combined.csv"
+COMBINED_A_RUNS = "runs_from_cluster_a_combined_merged.csv"
 H_RUNS = "cluster_h_first10min.csv"
 THETA = 50
 

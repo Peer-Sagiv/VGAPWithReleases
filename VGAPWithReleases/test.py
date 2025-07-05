@@ -1,4 +1,4 @@
-import os
+import sys
 import json
 import matplotlib.pyplot as plt
 import shutil
@@ -35,7 +35,6 @@ def write_values(name, clients):
         writer.writerows(values)
 
 def save_value(name, value):
-    print(f"Saving the value {value} to {name}")
     with open(name, "w") as f:
         f.write(str(value))
 
@@ -63,7 +62,7 @@ def print_all_results(res_dir="."):
 
 def handle_cls_context(cls, name, *args, log_results=False):
     instance = cls(*args)
-    print(f"Calculating {name}")
+    # print(f"Calculating {name}")
     value = instance.calc_value()
     if log_results:
         save_value(name, value)
@@ -73,27 +72,27 @@ def handle_cls_context(cls, name, *args, log_results=False):
 
 def run_all(history, clients, machines, required_time, run_simple_alg=False, log_results=False):
     values = {}
-    print("Calculating our algs")
+    # print("Calculating our algs")
     if run_simple_alg:
         values[VGAPWD_NAME] = handle_cls_context(VGAPWD, VGAPWD_NAME, history, machines, clients, required_time, log_results=log_results)
     values[VMKPSD_NAME] = handle_cls_context(VMKPSD, VMKPSD_NAME, history, machines, clients, required_time, log_results=log_results)
 
 
-    print("calculating simple")
+    # print("calculating simple")
     values[BEST_FIT_NAME] = handle_cls_context(BestFitAlg, BEST_FIT_NAME, machines, clients, log_results=log_results)
     values[FIRST_FIT_NAME] = handle_cls_context(FirstFitAlg, FIRST_FIT_NAME, machines, clients, log_results=log_results)
     values[WORST_FIT_NAME] = handle_cls_context(WorstFitAlg, WORST_FIT_NAME, machines, clients, log_results=log_results)
     values[RANDOM_ORDER_NAME] = handle_cls_context(RandomOrderAlg, RANDOM_ORDER_NAME, machines, clients, log_results=log_results)
 
-    print("calculating OKPD")
+    # print("calculating OKPD")
     values[WCO_NAME] = handle_cls_context(WCOAlg, WCO_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
     values[GREEDY_NAME] = handle_cls_context(GreedyAlg, GREEDY_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
     values[DESIGN_1_NAME] = handle_cls_context(Design1Alg, DESIGN_1_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
     values[DESIGN_2_NAME] = handle_cls_context(Design2Alg, DESIGN_2_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
     values[DATA_DRIVEN_NAME] = handle_cls_context(DataDrivenAlg, DATA_DRIVEN_NAME, machines, clients, history, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
-    values[GAMMA_OFFLINE_NAME] = handle_cls_context(GammaOfflineAlg, GAMMA_OFFLINE_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
+    values[GAMMA_OFFLINE_NAME] = handle_cls_context(GammaOfflineAlg, GAMMA_OFFLINE_NAME, machines, clients, history, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
 
-    print("calculating opt")
+    # print("calculating opt")
     values[OPT_NAME] = handle_cls_context(OPTAlg, OPT_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
 
     if log_results:
@@ -180,13 +179,13 @@ def run_test(theta, required_time, num_machines, run_simple_alg, log_results, na
     machines = [Machine([1, 1]) for _ in range(num_machines)]
     for i in range(TESTS_PER_TARGET):
         curr_res_path = results_dir / f"run_{i + 1}"
-        print("Creating sample")
+        # print("Creating sample")
         history, clients = create_random_test_sample(theta, required_time)
         while history is None:
-            print("Sample size too small. Creating new sample")
+            # print("Sample size too small. Creating new sample")
             history, clients = create_random_test_sample(theta, required_time)
-        print("Running sample")
-        results = run_all(history, clients, machines, required_time, run_simple_alg=run_simple_alg, log_results=log_results)
+        # print("Running sample")
+        results = run_all(history, clients[:10], machines[:10], required_time, run_simple_alg=run_simple_alg, log_results=log_results)
         with open(curr_res_path, "w") as f:
             json.dump(results, f)
         for res in results:
@@ -195,28 +194,28 @@ def run_test(theta, required_time, num_machines, run_simple_alg, log_results, na
     with open(final_res_path, "w") as f:
         json.dump(final_res_path, f)
 
-def main():
-    tasks = []
+theta = int(sys.argv[1])
+required_time = int(sys.argv[2])
+num_machines = int(sys.argv[3])
+run_simple_alg = sys.argv[4].lower() == "true"
+log_results = sys.argv[5].lower() == "true"
+name = sys.argv[6]
+trial = int(sys.argv[7])
 
-    with ProcessPoolExecutor() as executor:
-        # Time interval tests
-        for i in range(10, 110, 10):
-            tasks.append(executor.submit(run_test, 50, i, 5, False, False, f"Time interval {i}"))
+results_dir = Path(name)
+results_dir.mkdir(exist_ok=True, parents=True)
+curr_res_path = results_dir / f"run_{trial}"
 
-        # Compare loads
-        for i in range(2, 11):
-            tasks.append(executor.submit(run_test, 50, 50, i, False, False, f"Machine load {i} machines"))
+machines = [Machine([1, 1]) for _ in range(num_machines)]
 
-        # Compare Thetas
-        for i in range(10, 60, 10):
-            tasks.append(executor.submit(run_test, i, 50, 5, True, False, f"Theta {i}"))
+# print("Creating sample")
+history, clients = create_random_test_sample(theta, required_time)
+while history is None:
+    # print("Sample too small. Retrying...")
+    history, clients = create_random_test_sample(theta, required_time)
 
-        for future in as_completed(tasks):
-            try:
-                result = future.result()
-                print(f"Completed: {result}")
-            except Exception as e:
-                print(f"Error: {e}")
+# print("Running sample")
+results = run_all(history, clients, machines, required_time, run_simple_alg=run_simple_alg, log_results=log_results)
 
-if __name__ == "__main__":
-    main()
+with open(curr_res_path, "w") as f:
+    json.dump(results, f)

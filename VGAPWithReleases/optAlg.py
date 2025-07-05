@@ -27,7 +27,7 @@ class OPTAlg:
                     prob += lpSum(c.demands[d] * x[(c, s)]  for c in active_clients) <= s.capacity(d), f"Cap_{s}_{d}_t{t}"
         
         total_value = 0
-        prob.solve()
+        prob.solve(PULP_CBC_CMD(msg=0))
         for client in self._clients:
             for machine in self._machines:
                 total_value += client.value * x[(client, machine)].varValue

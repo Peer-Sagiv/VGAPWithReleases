@@ -1,5 +1,6 @@
 import math
 import numpy as np
+from scipy.special import lambertw
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
@@ -88,7 +89,7 @@ class OKPDAlgBase:
             m.clear()
         for i, c in enumerate(self._clients):
             self.step(c)
-            print(f"Finished round {i}")
+            # print(f"Finished round {i}")
         return self._value
 
 class GreedyAlg(OKPDAlgBase):
@@ -117,13 +118,24 @@ class TailoredOKPDA(OKPDAlgBase):
     def _threshold_function(self, z, capacity, slot_duration):
         return np.exp((self._w * z) / capacity) - 1
 
-class DataDrivenAlg:
+class DataDrivenAlg(OKPDAlgBase):
     def __init__(self, machines:List['Machine'], clients: List['Client'], history: List['Client'], time_slot_interval):
-        self._w_list = [0.1 * i for i in range(1, 31)]
-        self._machines = machines
-        self._clients = clients
+        super().__init__(machines, clients, time_slot_interval)
+        self._w_list = self.calc_w_list()
         self._history = history
         self._time_slot_interval = time_slot_interval
+
+    def calc_w_list(self):
+        ln2 = np.log(2)
+        beta_hat = 10 + (12 / ln2) * np.log(self._alpha * self._theta + 1)
+        zeta_k = -ln2 / (6 * self._alpha * self._theta)
+        w_arg = ((beta_hat - 1) * zeta_k / 2) * np.sqrt(2) * np.exp((beta_hat - 1) * zeta_k / 2)
+        lower = (beta_hat - 1) * zeta_k - 2 * lambertw(w_arg).real
+
+        C_k = 1.0
+        epsilon = 0.001
+        upper = ln2 * min((beta_hat - 4) / 6, C_k / epsilon)
+        return np.arange(lower, upper + 0.05, 0.1)
 
     def calc_value(self):
         best_value, best_w = -1, None
@@ -136,13 +148,7 @@ class DataDrivenAlg:
         best_alg = TailoredOKPDA(self._machines, self._clients, self._time_slot_interval, best_w)
         return best_alg.calc_value()
     
-class GammaOfflineAlg:
-    def __init__(self, machines:List['Machine'], clients: List['Client'], time_slot_interval):
-        self._w_list = [0.1 * i for i in range(1, 31)]
-        self._machines = machines
-        self._clients = clients
-        self._time_slot_interval = time_slot_interval
-
+class GammaOfflineAlg(DataDrivenAlg):
     def calc_value(self):
         best_value = -1
         for w in self._w_list:

@@ -68,13 +68,13 @@ class VGAPWD:
         probs = [(s, x[(client, s)].varValue) for s in self._machines]
         total = sum(p for _, p in probs) if probs else 0
         if total == 0:
-            print(f"Customer {client} is unassigned")
+            # print(f"Customer {client} is unassigned")
             assigned_machine = None
         else:
             normalized = [(s, p / total) for s, p in probs]
             slots, weights = zip(*normalized)
             assigned_machine = random.choices(slots, weights=weights)[0]
-            print(f"Customer {client} assigned to {assigned_machine} by randomized rounding")
+            # print(f"Customer {client} assigned to {assigned_machine} by randomized rounding")
 
         if assigned_machine and assigned_machine.check_feasible(client):
             self._value += client.value
@@ -86,7 +86,7 @@ class VGAPWD:
         self._clients.sort(key=lambda c:c.assign_time)
         for i, c in enumerate(self._clients):
             self.step(c)
-            print(f"Finished round {i}")
+            # print(f"Finished round {i}")
         return self._value
 
 
