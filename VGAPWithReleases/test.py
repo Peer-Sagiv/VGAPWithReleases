@@ -3,6 +3,7 @@ import json
 import matplotlib.pyplot as plt
 import shutil
 import csv
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from collections import defaultdict
 from pathlib import Path
 from newAlgs import VGAPWD, VMKPSD
@@ -185,7 +186,7 @@ def run_test(theta, required_time, num_machines, run_simple_alg, log_results, na
             print("Sample size too small. Creating new sample")
             history, clients = create_random_test_sample(theta, required_time)
         print("Running sample")
-        results = run_all(history[:10], clients[:10], machines, required_time, run_simple_alg=run_simple_alg, log_results=log_results)
+        results = run_all(history, clients, machines, required_time, run_simple_alg=run_simple_alg, log_results=log_results)
         with open(curr_res_path, "w") as f:
             json.dump(results, f)
         for res in results:
@@ -194,14 +195,28 @@ def run_test(theta, required_time, num_machines, run_simple_alg, log_results, na
     with open(final_res_path, "w") as f:
         json.dump(final_res_path, f)
 
-# Time interval tests
-for i in range(10, 110, 10):
-    run_test(50, i, 5, False, False, f"Time interval {i}")
+def main():
+    tasks = []
 
-# Compare loads
-for i in range(2, 11):
-    run_test(50, 50, i, False, False, f"Machine load {i} machines")
+    with ProcessPoolExecutor() as executor:
+        # Time interval tests
+        for i in range(10, 110, 10):
+            tasks.append(executor.submit(run_test, 50, i, 5, False, False, f"Time interval {i}"))
 
-# Compare Thetas
-for i in range(10, 60, 10):
-    run_test(i, 50, 5, True, False, f"Theta {i}")
+        # Compare loads
+        for i in range(2, 11):
+            tasks.append(executor.submit(run_test, 50, 50, i, False, False, f"Machine load {i} machines"))
+
+        # Compare Thetas
+        for i in range(10, 60, 10):
+            tasks.append(executor.submit(run_test, i, 50, 5, True, False, f"Theta {i}"))
+
+        for future in as_completed(tasks):
+            try:
+                result = future.result()
+                print(f"Completed: {result}")
+            except Exception as e:
+                print(f"Error: {e}")
+
+if __name__ == "__main__":
+    main()
