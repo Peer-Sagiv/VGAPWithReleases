@@ -3,9 +3,10 @@ import json
 import matplotlib.pyplot as plt
 import shutil
 import csv
+from collections import defaultdict
 from pathlib import Path
 from newAlgs import VGAPWD, VMKPSD
-from members import Machine, Client
+from members import Machine
 from OKPDAlgs import WCOAlg, GreedyAlg, Design1Alg, Design2Alg, DataDrivenAlg, GammaOfflineAlg
 from simpleAlgs import FirstFitAlg, BestFitAlg, RandomOrderAlg, WorstFitAlg
 from optAlg import OPTAlg
@@ -15,9 +16,7 @@ from consts import *
 
 GOOGLE_CLUSTERS_TIME_INTERVAL = 1_000_000
 LOAD_RANDOM_DEMANDS = False
-MACHINES = [Machine([1, 1]) for _ in range(5)]
-OPT_ALG_NAME = "OPT"
-NUM_INTERVALS = 10
+TESTS_PER_TARGET = 10
 
 # with open("clean_1000_rounds_valued.json") as f:
 #     rounds = json.load(f)
@@ -39,13 +38,13 @@ def save_value(name, value):
     with open(name, "w") as f:
         f.write(str(value))
 
-# I'm running too many tests in parallel. This is a hacky solution to properly print the results when I want to
-ALL_RESULTS_NAMES = ["Our alg", "Best fit", "First fit", "Worst fit", "Random order fit", "WCO", "Greedy", "Design 1", "Design 2", OPT_ALG_NAME, "VMKPSD", "DOA", "gamma_offline"]
 def print_all_results(res_dir="."):
     curr_dir = Path(res_dir)
-    for name in ALL_RESULTS_NAMES:
-        with open(curr_dir / name) as f:
-            print(f"{name} value is {f.read()}")
+    for name in ALGS_NAMES:
+        curr_res: Path = curr_dir / name
+        if curr_res.exists():
+            with open(curr_res) as f:
+                print(f"{name} value is {f.read()}")
 
 
 # """
@@ -61,92 +60,75 @@ def print_all_results(res_dir="."):
 #     CLIENTS = [Client.from_presaved_entry(entry) for entry in raw_data]
 
 
-def handle_cls_context(cls, name, *args):
+def handle_cls_context(cls, name, *args, log_results=False):
     instance = cls(*args)
     print(f"Calculating {name}")
     value = instance.calc_value()
-    save_value(name, value)
+    if log_results:
+        save_value(name, value)
     del instance
     return value
 
 
-def run_all(history_csv, clients_csv, machines):
-    with open(history_csv) as f:
-        raw_data = csv.DictReader(f)
-        history = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
-        write_values("current_history.csv", history)
-
-    with open(clients_csv) as f:
-        raw_data = csv.DictReader(f)
-        clients = [Client.from_csv_entry(entry, random_demands=LOAD_RANDOM_DEMANDS) for entry in raw_data]
-        write_values("current_clients.csv", clients)
-
+def run_all(history, clients, machines, required_time, run_simple_alg=False, log_results=False):
+    values = {}
     print("Calculating our algs")
-    vgapwd_val = handle_cls_context(VGAPWD, "Our alg", history, machines, clients, NUM_INTERVALS)
-    vmkpsd_val = handle_cls_context(VMKPSD, "VMKPSD", history, machines, clients, NUM_INTERVALS)
+    if run_simple_alg:
+        values[VGAPWD_NAME] = handle_cls_context(VGAPWD, VGAPWD_NAME, history, machines, clients, required_time, log_results=log_results)
+    values[VMKPSD_NAME] = handle_cls_context(VMKPSD, VMKPSD_NAME, history, machines, clients, required_time, log_results=log_results)
 
 
     print("calculating simple")
-    best_fit_val = handle_cls_context(BestFitAlg, "Best fit", machines, clients)
-    first_fit_val = handle_cls_context(FirstFitAlg, "First fit", machines, clients)
-    worst_fit_val = handle_cls_context(WorstFitAlg, "Worst fit", machines, clients)
-    random_order_val = handle_cls_context(RandomOrderAlg, "Random order fit", machines, clients)
+    values[BEST_FIT_NAME] = handle_cls_context(BestFitAlg, BEST_FIT_NAME, machines, clients, log_results=log_results)
+    values[FIRST_FIT_NAME] = handle_cls_context(FirstFitAlg, FIRST_FIT_NAME, machines, clients, log_results=log_results)
+    values[WORST_FIT_NAME] = handle_cls_context(WorstFitAlg, WORST_FIT_NAME, machines, clients, log_results=log_results)
+    values[RANDOM_ORDER_NAME] = handle_cls_context(RandomOrderAlg, RANDOM_ORDER_NAME, machines, clients, log_results=log_results)
 
     print("calculating OKPD")
-    wco_val = handle_cls_context(WCOAlg, "WCO", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
-    greedy_val = handle_cls_context(GreedyAlg, "Greedy", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
-    design1_val = handle_cls_context(Design1Alg, "Design 1", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
-    design2_val = handle_cls_context(Design2Alg, "Design 2", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
-    doa_val = handle_cls_context(DataDrivenAlg, "DOA", machines, clients, history, GOOGLE_CLUSTERS_TIME_INTERVAL)
-    gamma_offline_val = handle_cls_context(GammaOfflineAlg, "gamma_offline", machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    values[WCO_NAME] = handle_cls_context(WCOAlg, WCO_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
+    values[GREEDY_NAME] = handle_cls_context(GreedyAlg, GREEDY_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
+    values[DESIGN_1_NAME] = handle_cls_context(Design1Alg, DESIGN_1_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
+    values[DESIGN_2_NAME] = handle_cls_context(Design2Alg, DESIGN_2_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
+    values[DATA_DRIVEN_NAME] = handle_cls_context(DataDrivenAlg, DATA_DRIVEN_NAME, machines, clients, history, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
+    values[GAMMA_OFFLINE_NAME] = handle_cls_context(GammaOfflineAlg, GAMMA_OFFLINE_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
 
     print("calculating opt")
-    opt_val = handle_cls_context(OPTAlg, OPT_ALG_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL)
+    values[OPT_NAME] = handle_cls_context(OPTAlg, OPT_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
 
-    print_all_results()
-    # return [vmkpsd_val, vgapwd_val, best_fit_val, first_fit_val, worst_fit_val, random_order_val, wco_val, greedy_val, design1_val, desi]
+    if log_results:
+        print_all_results(values)
 
+    return values
 
 def move_results_to_dir(dir_name):
     dir_path = Path(dir_name)
     dir_path.mkdir(exist_ok=True, parents=True)
-    for name in ALL_RESULTS_NAMES + ["current_clients.csv", "current_history.csv"]:
+    for name in ALGS_NAMES:
         shutil.move(name, dir_path / name)
 
 
-
-def plot_results(dir_name):
-    dir_path = Path(dir_name)
-    values = []
-    for name in ALL_RESULTS_NAMES:
-        with open(dir_path / name) as f:
-            values.append(float(f.read()))
-    plt.bar(ALL_RESULTS_NAMES, values)
+def plot_results(results_path):
+    with open(results_path) as f:
+        values = (json.load(f))
+    plt.bar(values.keys(), values.values())
     plt.xlabel("Alg")
     plt.xticks(rotation=45, ha='right')
     plt.ylabel("Value")
-    plt.title(dir_name)
+    plt.title(results_path.parent.name)
 
     plt.show()
 
 
-def calc_competative_value(alg_name, base_dir="."):
-    dir_path = Path(base_dir)
-    with open(dir_path / alg_name) as f:
-        alg_res = float(f.read())
-    with open(dir_path / OPT_ALG_NAME) as f:
-        opt_res = float(f.read())
-    return alg_res / opt_res
-
-
-def plot_relative_result(dir_name):
+def plot_relative_result(results_path):
     values = []
-    for name in ALL_RESULTS_NAMES:
-        values.append(calc_competative_value(name, dir_name))
-    bars = plt.bar(ALL_RESULTS_NAMES, values)
+    with open(results_path) as f:
+        raw_values = (json.load(f))
+    for v in raw_values:
+        values.append(raw_values[v] / raw_values[OPT_NAME])
+    bars = plt.bar(raw_values.keys(), values)
     plt.xticks(rotation=45, ha='right')
     plt.ylabel("Value")
-    plt.title(dir_name)
+    plt.title(results_path.parent.name)
 
     for bar in bars:
         height = bar.get_height()
@@ -160,44 +142,66 @@ def plot_relative_result(dir_name):
     plt.tight_layout()
     plt.show()
 
-def calc_average_competative_value(base_dir="."):
-    all_subdirs = []
-    for dirpath, dirnames, _ in os.walk(base_dir):
-        all_subdirs.extend([os.path.join(dirpath, d) for d in dirnames])
-    algs_value = {name: 0 for name in ALL_RESULTS_NAMES}
-    for dir_name in all_subdirs:
-        for name in ALL_RESULTS_NAMES:
-            with open(Path(dir_name) / name) as f:
-                algs_value[name] += float(f.read())
-    return {v : algs_value[v] / algs_value[OPT_ALG_NAME] for v in algs_value}
+# def calc_average_competative_value(base_dir="."):
+#     all_subdirs = []
+#     for dirpath, dirnames, _ in os.walk(base_dir):
+#         all_subdirs.extend([os.path.join(dirpath, d) for d in dirnames])
+#     algs_value = {name: 0 for name in ALL_RESULTS_NAMES}
+#     for dir_name in all_subdirs:
+#         for name in ALL_RESULTS_NAMES:
+#             with open(Path(dir_name) / name) as f:
+#                 algs_value[name] += float(f.read())
+#     return {v : algs_value[v] / algs_value[OPT_ALG_NAME] for v in algs_value}
 
-def plot_average_competative_value(base_dir="."):
-    algs_values = calc_average_competative_value(base_dir)
-    bars = plt.bar(algs_values.keys(), algs_values.values())
-    plt.xticks(rotation=45, ha='right')
-    plt.ylabel("Value")
-    plt.title(base_dir)
+# def plot_average_competative_value(base_dir="."):
+#     algs_values = calc_average_competative_value(base_dir)
+#     bars = plt.bar(algs_values.keys(), algs_values.values())
+#     plt.xticks(rotation=45, ha='right')
+#     plt.ylabel("Value")
+#     plt.title(base_dir)
 
-    for bar in bars:
-        height = bar.get_height()
-        plt.text(
-            bar.get_x() + bar.get_width() / 2,
-            height,
-            f"{height:.2f}",
-            ha='center', va='bottom'
-        )
+#     for bar in bars:
+#         height = bar.get_height()
+#         plt.text(
+#             bar.get_x() + bar.get_width() / 2,
+#             height,
+#             f"{height:.2f}",
+#             ha='center', va='bottom'
+#         )
 
-    plt.tight_layout()
-    plt.show()
+#     plt.tight_layout()
+#     plt.show()
 
-def run_test_with_theta(theta):
-    BASE_CLUSTER_A_RES_PATH = Path(".").parent / f"Cluster A - theta {theta} - 300 instances"
-    for i in range(1):
+def run_test(theta, required_time, num_machines, run_simple_alg, log_results, name):
+    results_dir = Path(".") / name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    test_result = defaultdict(lambda: 0)
+    machines = [Machine([1, 1]) for _ in range(num_machines)]
+    for i in range(TESTS_PER_TARGET):
+        curr_res_path = results_dir / f"run_{i + 1}"
         print("Creating sample")
-        while not create_random_test_sample(theta, 10):
+        history, clients = create_random_test_sample(theta, required_time)
+        while history is None:
             print("Sample size too small. Creating new sample")
+            history, clients = create_random_test_sample(theta, required_time)
         print("Running sample")
-        run_all(HISTORY_FROM_CLUSTER_A, CLIENTS_FROM_CLUSTER_A, MACHINES)
-        move_results_to_dir(BASE_CLUSTER_A_RES_PATH / f"run_{i}")
+        results = run_all(history[:10], clients[:10], machines, required_time, run_simple_alg=run_simple_alg, log_results=log_results)
+        with open(curr_res_path, "w") as f:
+            json.dump(results, f)
+        for res in results:
+            test_result[res] += results[res]
+    final_res_path = results_dir / f"final"
+    with open(final_res_path, "w") as f:
+        json.dump(final_res_path, f)
 
-run_test_with_theta(10)
+# Time interval tests
+for i in range(10, 110, 10):
+    run_test(50, i, 5, False, False, f"Time interval {i}")
+
+# Compare loads
+for i in range(2, 11):
+    run_test(50, 50, i, False, False, f"Machine load {i} machines")
+
+# Compare Thetas
+for i in range(10, 60, 10):
+    run_test(i, 50, 5, True, False, f"Theta {i}")

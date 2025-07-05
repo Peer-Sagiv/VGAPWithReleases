@@ -31,7 +31,6 @@ class OKPDAlgBase:
             c_theta = c.value / (sum(c.demands) * ((c.departure_time -  c.assign_time) / self._time_slot_interval))
             if not theta or c_theta > theta:
                 theta = c_theta
-        print(f"Theta is {theta}")
         return theta
 
     def _calc_alpha(self):
@@ -129,7 +128,6 @@ class DataDrivenAlg:
     def calc_value(self):
         best_value, best_w = -1, None
         for w in self._w_list:
-            print(f"Calculating DOA with W - {w}")
             curr_alg = TailoredOKPDA(self._machines, self._history, self._time_slot_interval, w)
             curr_res = curr_alg.calc_value()
             if curr_res > best_value:

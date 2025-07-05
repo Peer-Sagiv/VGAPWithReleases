@@ -107,12 +107,12 @@ class VMKPSD(VGAPWD):
         prob.solve(PULP_CBC_CMD(msg=0))
         probability = x[(client)].varValue
         if probability < random.random():
-            print(f"Customer {client} is unassigned")
+            # print(f"Customer {client} is unassigned")
             return
         for s in self._machines:
             if s.check_feasible(client):
                 s.assign(client)
                 self._value += client.value
-                print(f"Customer {client} assigned to {s} by randomized rounding")
+                # print(f"Customer {client} assigned to {s} by randomized rounding")
                 return
-        print(f"Customer {client} is unassigned due to no free machines")
+        # print(f"Customer {client} is unassigned due to no free machines")

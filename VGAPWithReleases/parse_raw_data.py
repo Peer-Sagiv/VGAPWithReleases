@@ -2,6 +2,7 @@ import csv
 import random
 from collections import defaultdict
 from consts import *
+from members import Client
 
 def get_concated_instance(inst):
     ordered_inst = {}
@@ -78,7 +79,7 @@ def create_random_test_sample(theta, required_time):
 
     instances = defaultdict(lambda: [])
     for inst in parsed_data:
-        if inst['max_cpus'] and float(inst['max_cpus']) > 0 and inst['max_memory'] and float(inst['max_memory']) > 0:
+        if inst['max_cpus'] and inst['max_memory'] and (float(inst['max_cpus']) > 0  or float(inst['max_memory']) > 0):
             instances[inst["instance_index"], inst["collection_id"]].append(inst)
 
     concated_instances = {}
@@ -101,7 +102,7 @@ def create_random_test_sample(theta, required_time):
     second_interval_values = list(second_interval.values())
 
     if len(first_interval_values) < MIN_SAMPLE_SIZE or len(second_interval_values) < MIN_SAMPLE_SIZE:
-        return False 
+        return None, None 
 
     first_interval_values.sort(key=lambda x: int(x['start_time']))
     second_interval_values.sort(key=lambda x: int(x['start_time']))
@@ -119,14 +120,7 @@ def create_random_test_sample(theta, required_time):
     for inst in online_set:
         give_value_by_theta(inst, theta)
 
-    with open(HISTORY_FROM_CLUSTER_A, "w") as f:
-        writer = csv.DictWriter(f, history_set[0].keys())
-        writer.writeheader()
-        writer.writerows(history_set)
+    history = [Client.from_csv_entry(entry) for entry in history_set]
+    clients = [Client.from_csv_entry(entry) for entry in online_set]
 
-    with open(CLIENTS_FROM_CLUSTER_A, "w") as f:
-        writer = csv.DictWriter(f, online_set[0].keys())
-        writer.writeheader()
-        writer.writerows(online_set)
-
-    return True
+    return history, clients
