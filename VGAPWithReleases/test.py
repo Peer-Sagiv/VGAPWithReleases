@@ -3,7 +3,6 @@ import json
 import matplotlib.pyplot as plt
 import shutil
 import csv
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from collections import defaultdict
 from pathlib import Path
 from newAlgs import VGAPWD, VMKPSD
@@ -201,6 +200,10 @@ run_simple_alg = sys.argv[4].lower() == "true"
 log_results = sys.argv[5].lower() == "true"
 name = sys.argv[6]
 trial = int(sys.argv[7])
+if len(sys.argv) > 8:
+    pareto_alpha = float(sys.argv[8])
+else:
+    pareto_alpha = None
 
 results_dir = Path(name)
 results_dir.mkdir(exist_ok=True, parents=True)
@@ -209,7 +212,7 @@ curr_res_path = results_dir / f"run_{trial}"
 machines = [Machine([1, 1]) for _ in range(num_machines)]
 
 # print("Creating sample")
-history, clients = create_random_test_sample(theta, required_time)
+history, clients = create_random_test_sample(theta, required_time, pareto_alpha)
 while history is None:
     # print("Sample too small. Retrying...")
     history, clients = create_random_test_sample(theta, required_time)

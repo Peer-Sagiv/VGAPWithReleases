@@ -100,7 +100,7 @@ class Design1Alg(OKPDAlgBase):
     def _threshold_function(self, z, capacity, slot_duration):
         if z < capacity / (1 + np.log(self._theta)):
             return 1
-        return np.exp((1 + np.log(self._theta) * z ) / (capacity - 1))
+        return np.exp(((1 + np.log(self._theta) * z ) / capacity) - 1)
     
 class Design2Alg(OKPDAlgBase):
     def _threshold_function(self, z, capacity, slot_duration):

@@ -1,4 +1,5 @@
 import csv
+import numpy as np
 import random
 from collections import defaultdict
 from consts import *
@@ -40,10 +41,13 @@ def get_history_and_online_set(first_values, second_values):
         return first_values, second_values
     return second_values, first_values
 
-def give_value_by_theta(inst, theta):
+def give_value_by_theta(inst, theta, pareto_alpha):
     inst_d = (int(inst['end_time']) - int(inst['start_time'])) / GOOGLE_CLUSTERS_TIME_INTERVAL
-    # TODO: Random int? Why not random float?
-    inst["value"] = random.randint(1, theta) * (inst['max_memory'] + inst['max_cpus']) * inst_d
+    if not pareto_alpha:
+        # TODO: Random int? Why not random float?
+        inst["value"] = random.randint(1, theta) * (inst['max_memory'] + inst['max_cpus']) * inst_d
+    else:
+        inst["value"] = min((1 + np.random.pareto(pareto_alpha)), theta)
 
 # Ensure the instances intersect
 def count_intersections(intervals):
@@ -69,7 +73,7 @@ def count_intersections(intervals):
 def get_average_duration(demands):
     return sum([int(v['end_time']) - int(v['start_time']) for v in demands]) / len(demands)
 
-def create_random_test_sample(theta, required_time):
+def create_random_test_sample(theta, required_time, pareto_alpha):
     required_interval_time = required_time * GOOGLE_CLUSTERS_TIME_INTERVAL
     max_query_interval = ((QUERY_END_TIME - QUERY_START_TIME) // GOOGLE_CLUSTERS_TIME_INTERVAL) - 3 * required_time
 
@@ -82,24 +86,24 @@ def create_random_test_sample(theta, required_time):
         if inst['max_cpus'] and inst['max_memory'] and (float(inst['max_cpus']) > 0  or float(inst['max_memory']) > 0):
             instances[inst["instance_index"], inst["collection_id"]].append(inst)
 
-    concated_instances = {}
+    flattened_instances = []
     
     for raw_instance_key in instances:
-        ordered_intance = get_concated_instance(instances[raw_instance_key])
-        if ordered_intance:
-            concated_instances[raw_instance_key] = ordered_intance
+        for entry in instances[raw_instance_key]:
+            # parse and store each entry directly
+            entry['max_cpus'] = float(entry['max_cpus'])
+            entry['max_memory'] = float(entry['max_memory'])
+            entry['start_time'] = int(entry['start_time'])
+            entry['end_time'] = int(entry['end_time'])
+            flattened_instances.append(entry)
 
     # Select a random time to derive the history and online set from
     current_query_time = random.randint(1, max_query_interval) * GOOGLE_CLUSTERS_TIME_INTERVAL + QUERY_START_TIME
 
-    # remove heavy machiens
-    concated_instances = {i: concated_instances[i] for i in concated_instances if concated_instances[i]['max_cpus'] <= 0.5 and concated_instances[i]['max_memory'] <= 0.5}
+    filtered = [inst for inst in flattened_instances if inst['max_cpus'] <= 0.5 and inst['max_memory'] <= 0.5]
 
-    first_interval = {i: concated_instances[i] for i in concated_instances if current_query_time <= int(concated_instances[i]['start_time']) < current_query_time + required_interval_time}
-    second_interval = {i: concated_instances[i] for i in concated_instances if current_query_time + required_interval_time <= int(concated_instances[i]['start_time']) < current_query_time + required_interval_time * 2}
-
-    first_interval_values = list(first_interval.values())
-    second_interval_values = list(second_interval.values())
+    first_interval_values = [inst for inst in filtered if current_query_time <= inst['start_time'] < current_query_time + required_interval_time]
+    second_interval_values = [inst for inst in filtered if current_query_time + required_interval_time <= inst['start_time'] < current_query_time + required_interval_time * 2]
 
     if len(first_interval_values) < MIN_SAMPLE_SIZE or len(second_interval_values) < MIN_SAMPLE_SIZE:
         return None, None 
@@ -115,10 +119,10 @@ def create_random_test_sample(theta, required_time):
     second_interval_values = [value for value in second_interval_values if int(value['start_time']) != int(value['end_time'])]
     history_set, online_set = first_interval_values, second_interval_values
     for inst in history_set:
-        give_value_by_theta(inst, theta)
+        give_value_by_theta(inst, theta, pareto_alpha)
 
     for inst in online_set:
-        give_value_by_theta(inst, theta)
+        give_value_by_theta(inst, theta, pareto_alpha)
 
     history = [Client.from_csv_entry(entry) for entry in history_set]
     clients = [Client.from_csv_entry(entry) for entry in online_set]

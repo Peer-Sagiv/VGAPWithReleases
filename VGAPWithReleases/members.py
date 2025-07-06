@@ -30,7 +30,7 @@ class Client:
     
     @classmethod
     def from_presaved_entry(cls, entry):
-        return cls(int(entry["start_time"]), int(entry["end_time"]), [float(d) for d in json.loads(entry["demands"])], int(entry["value"]))
+        return cls(int(entry["start_time"]), int(entry["end_time"]), [float(d) for d in json.loads(entry["demands"])], float(entry["value"]))
 
     @classmethod
     def unsatisfiable_client(cls, dimensions):
