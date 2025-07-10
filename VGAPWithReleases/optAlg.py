@@ -1,5 +1,6 @@
 from pulp import *
 from typing import List, TYPE_CHECKING
+from collections import defaultdict
 
 if TYPE_CHECKING:
     from members import Client, Machine
@@ -18,13 +19,18 @@ class OPTAlg:
         x = LpVariable.dicts("x", ((c, s) for c in self._clients for s in self._machines), lowBound=0, upBound=1)
         prob += lpSum(c.value * x[(c, s)] for c in self._clients for s in self._machines)
 
+        active_clients_per_time = defaultdict(list)
+        for c in self._clients:
+            for t in T:
+                if c.assign_time <= t < c.departure_time:
+                    active_clients_per_time[t].append(c)
+
         for c in self._clients:
             prob += lpSum(x[(c, s)] for s in self._machines) <= 1, f"MachineAssignment_{c}"
         for s in self._machines:
             for d in range(self._dimension):
                 for t in T:
-                    active_clients = [c for c in self._clients if c.assign_time <= t < c.departure_time]
-                    prob += lpSum(c.demands[d] * x[(c, s)]  for c in active_clients) <= s.capacity(d), f"Cap_{s}_{d}_t{t}"
+                    prob += lpSum(c.demands[d] * x[(c, s)]  for c in active_clients_per_time[t]) <= s.capacity(d), f"Cap_{s}_{d}_t{t}"
         
         total_value = 0
         prob.solve(PULP_CBC_CMD(msg=0))
