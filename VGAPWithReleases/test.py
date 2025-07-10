@@ -215,7 +215,7 @@ machines = [Machine([1, 1]) for _ in range(num_machines)]
 history, clients = create_random_test_sample(theta, required_time, pareto_alpha)
 while history is None:
     # print("Sample too small. Retrying...")
-    history, clients = create_random_test_sample(theta, required_time)
+    history, clients = create_random_test_sample(theta, required_time, pareto_alpha)
 
 # print("Running sample")
 results = run_all(history, clients, machines, required_time, run_simple_alg=run_simple_alg, log_results=log_results)

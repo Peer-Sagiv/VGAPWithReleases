@@ -45,9 +45,10 @@ def give_value_by_theta(inst, theta, pareto_alpha):
     inst_d = (int(inst['end_time']) - int(inst['start_time'])) / GOOGLE_CLUSTERS_TIME_INTERVAL
     if not pareto_alpha:
         # TODO: Random int? Why not random float?
-        inst["value"] = random.randint(1, theta) * (inst['max_memory'] + inst['max_cpus']) * inst_d
+        multiplier = random.randint(1, theta)
     else:
-        inst["value"] = min((1 + np.random.pareto(pareto_alpha)), theta)
+        multiplier = min((1 + np.random.pareto(pareto_alpha)), theta)
+    inst["value"] = multiplier * (inst['max_memory'] + inst['max_cpus']) * inst_d
 
 # Ensure the instances intersect
 def count_intersections(intervals):

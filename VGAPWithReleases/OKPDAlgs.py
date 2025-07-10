@@ -104,7 +104,7 @@ class Design1Alg(OKPDAlgBase):
     
 class Design2Alg(OKPDAlgBase):
     def _threshold_function(self, z, capacity, slot_duration):
-        return math.floor(2 ** (z * np.log10(self._theta * slot_duration) / capacity)) - 1
+        return 2 ** math.floor((z * np.log10(self._theta * slot_duration) / capacity)) - 1
     
 class WCOAlg(OKPDAlgBase):
     def _threshold_function(self, z, capacity, slot_duration):

@@ -5,7 +5,7 @@ from pulp import *
 from members import Machine, Client
 from consts import *
 
-SLOTS = 1000
+SLOTS = 2000
 class VGAPWD:
     def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], num_intervals, alpha = 0.5):
         self._slot_count = SLOTS
