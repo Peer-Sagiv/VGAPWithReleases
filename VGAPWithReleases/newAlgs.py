@@ -102,7 +102,7 @@ class VMKPSD(VGAPWD):
         prob += lpSum(c.value * x[(c)] for c in history_set)
 
         for d in range(self._dimension):
-            prob += lpSum(c.demands[d] * ((c.departure_time - c.assign_time) / self._max_time_request) * x[(c)] for c in history_set) <= len(self._machines)
+            prob += lpSum(c.demands[d] * ((c.departure_time - c.assign_time) / self._max_time_request) * x[(c)] for c in history_set) <= len(self._machines) * self._alpha
         
         prob.solve(PULP_CBC_CMD(msg=0))
         probability = x[(client)].varValue
@@ -116,3 +116,23 @@ class VMKPSD(VGAPWD):
                 # print(f"Customer {client} assigned to {s} by randomized rounding")
                 return
         # print(f"Customer {client} is unassigned due to no free machines")
+
+
+class VMKPSDWH:
+    def __init__(self, history_set, test_set, machines, clients, num_intervals):
+        self._history_set = history_set
+        self._test_set = test_set
+        self._machines = machines
+        self._clients = clients
+        self._num_intervalse = num_intervals
+        self._alphas = [0.1, 0.5, 1, 1.5, 2]
+        
+    def calc_value(self):
+        best_alpha, best_val = None, -1
+        for alpha in self._alphas:
+            inst = VMKPSD(self._history_set, self._machines, self._test_set, self._num_intervalse, alpha)
+            val = inst.calc_value()
+            if val > best_val:
+                best_alpha = alpha
+        inst = VMKPSD(self._history_set, self._machines, self._clients, self._num_intervalse, best_alpha)
+        return inst.calc_value()

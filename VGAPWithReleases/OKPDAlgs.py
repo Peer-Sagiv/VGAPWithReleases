@@ -108,7 +108,7 @@ class Design2Alg(OKPDAlgBase):
     
 class WCOAlg(OKPDAlgBase):
     def _threshold_function(self, z, capacity, slot_duration):
-        return np.exp(z * np.log(self._alpha * self._theta + 1)) - 1
+        return np.exp(z * np.log(self._alpha * self._theta + 1))
 
 class TailoredOKPDA(OKPDAlgBase):
     def __init__(self, machines, clients, time_slot_interval, w):

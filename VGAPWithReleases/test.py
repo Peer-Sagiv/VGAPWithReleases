@@ -5,7 +5,7 @@ import shutil
 import csv
 from collections import defaultdict
 from pathlib import Path
-from newAlgs import VGAPWD, VMKPSD
+from newAlgs import VGAPWD, VMKPSD, VMKPSDWH
 from members import Machine
 from OKPDAlgs import WCOAlg, GreedyAlg, Design1Alg, Design2Alg, DataDrivenAlg, GammaOfflineAlg
 from simpleAlgs import FirstFitAlg, BestFitAlg, RandomOrderAlg, WorstFitAlg
@@ -69,12 +69,13 @@ def handle_cls_context(cls, name, *args, log_results=False):
     return value
 
 
-def run_all(history, clients, machines, required_time, run_simple_alg=False, log_results=False):
+def run_all(history, clients, test_set, machines, required_time, run_simple_alg=False, log_results=False):
     values = {}
     # print("Calculating our algs")
     if run_simple_alg:
         values[VGAPWD_NAME] = handle_cls_context(VGAPWD, VGAPWD_NAME, history, machines, clients, required_time, log_results=log_results)
-    values[VMKPSD_NAME] = handle_cls_context(VMKPSD, VMKPSD_NAME, history, machines, clients, required_time, log_results=log_results)
+    values[VMKPSD_NAME] = handle_cls_context(VMKPSD, VMKPSD_NAME, history, machines, clients, required_time, 1, log_results=log_results)
+    values[VMKPSDWH_NAME] = handle_cls_context(VMKPSDWH, VMKPSDWH_NAME, history, test_set, machines, clients, required_time, log_results=log_results)
 
 
     # print("calculating simple")
@@ -215,10 +216,10 @@ machines = [Machine([1, 1]) for _ in range(num_machines)]
 history, clients = create_random_test_sample(theta, required_time, pareto_alpha)
 while history is None:
     # print("Sample too small. Retrying...")
-    history, clients = create_random_test_sample(theta, required_time, pareto_alpha)
+    history, clients, test_set = create_random_test_sample(theta, required_time, pareto_alpha)
 
 # print("Running sample")
-results = run_all(history, clients, machines, required_time, run_simple_alg=run_simple_alg, log_results=log_results)
+results = run_all(history, clients, test_set, machines, required_time, run_simple_alg=run_simple_alg, log_results=log_results)
 
 with open(curr_res_path, "w") as f:
     json.dump(results, f)
