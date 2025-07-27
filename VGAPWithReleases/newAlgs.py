@@ -7,7 +7,7 @@ from consts import *
 
 SLOTS = 2000
 class VGAPWD:
-    def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], num_intervals, alpha = 0.5):
+    def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], num_intervals, alpha = 0.5, time_interval=GOOGLE_CLUSTERS_TIME_INTERVAL):
         self._slot_count = SLOTS
         self._clients: List['Client'] = copy.deepcopy(clients)
         self._current_clients_in_interval = []
@@ -18,7 +18,7 @@ class VGAPWD:
         self._current_assign_time = min(client.assign_time for client in self._clients) - 1
         self._value = 0
         self._alpha = alpha
-        self._max_time_request = num_intervals * GOOGLE_CLUSTERS_TIME_INTERVAL
+        self._max_time_request = num_intervals * time_interval
         self._current_index = 0
         self._current_random_index = 0
         self._pre_process_data()

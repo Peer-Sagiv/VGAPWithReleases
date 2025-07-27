@@ -74,8 +74,8 @@ def run_all(history, clients, test_set, machines, required_time, run_simple_alg=
     # print("Calculating our algs")
     if run_simple_alg:
         values[VGAPWD_NAME] = handle_cls_context(VGAPWD, VGAPWD_NAME, history, machines, clients, required_time, log_results=log_results)
-    values[VMKPSD_NAME] = handle_cls_context(VMKPSD, VMKPSD_NAME, history, machines, clients, required_time, 1, log_results=log_results)
-    values[VMKPSDWH_NAME] = handle_cls_context(VMKPSDWH, VMKPSDWH_NAME, history, test_set, machines, clients, required_time, log_results=log_results)
+    values[VMKPSD_NAME] = handle_cls_context(VMKPSD, VMKPSD_NAME, history, machines, clients, required_time, 1, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
+    values[VMKPSDWH_NAME] = handle_cls_context(VMKPSDWH, VMKPSDWH_NAME, history, test_set, machines, clients, required_time, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
 
 
     # print("calculating simple")

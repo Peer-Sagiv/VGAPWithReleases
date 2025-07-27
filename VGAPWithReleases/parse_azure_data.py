@@ -11,6 +11,7 @@ import numpy as np
 AZURE_TIME_INTERVAL_DAYS = 14
 AZURE_TIME_PARALLEL_DAYS = 7
 AZURE_TIME_INTERVAL = 0.0001
+MIN_VALID_TIME_REQUEST = 0.001
 DB_NAME = "packing_trace_zone_a_v1.sqlite"
 
 
@@ -56,10 +57,12 @@ def get_assignments_starting_between(db_path, t, l):
 
     return filtered_df
 
-def fix_max_end_time(values, time_interval):
+def fix_times(values, time_interval):
     for value in values:
         if int(value['end_time']) - int(value['start_time']) > time_interval:
             value['end_time'] = int(value['start_time']) + time_interval
+        value['end_time'] /= AZURE_TIME_INTERVAL
+        value['start_time'] /= AZURE_TIME_INTERVAL
 
 
 def give_value_by_theta(inst, theta, pareto_alpha):
@@ -73,6 +76,8 @@ def give_value_by_theta(inst, theta, pareto_alpha):
 
 
 def process_azure_data(theta, required_time, pareto_alpha, parallel_time=False):
+    if required_time < MIN_VALID_TIME_REQUEST:
+        return None, None
     if parallel_time:
         base_time = AZURE_TIME_PARALLEL_DAYS / AZURE_TIME_INTERVAL
     else:
@@ -99,8 +104,8 @@ def process_azure_data(theta, required_time, pareto_alpha, parallel_time=False):
     second_interval_values.sort(key=lambda x: int(x['start_time']))
     # third_interval_values.sort(key=lambda x: int(x['start_time']))
 
-    fix_max_end_time(first_interval_values, required_time)
-    fix_max_end_time(second_interval_values, required_time)
+    fix_times(first_interval_values, required_time)
+    fix_times(second_interval_values, required_time)
     # fix_max_end_time(third_interval_values, required_time)
 
     # history_set, online_set, test_set = first_interval_values, second_interval_values, third_interval_values
