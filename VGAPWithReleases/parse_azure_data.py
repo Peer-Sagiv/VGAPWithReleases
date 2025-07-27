@@ -109,4 +109,4 @@ def process_azure_data(theta, required_time, history_time, pareto_alpha, paralle
     history = post_process_entry(first_interval_values, original_required_time, theta, pareto_alpha)
     clients = post_process_entry(second_interval_values, original_required_time, theta, pareto_alpha)
 
-    return TimeWindow(history, history_start, history_end, 1), TimeWindow(clients, online_start, online_end, 1)
+    return TimeWindow(history, history_start // AZURE_TIME_INTERVAL, history_end // AZURE_TIME_INTERVAL, 1), TimeWindow(clients, online_start // AZURE_TIME_INTERVAL, online_end // AZURE_TIME_INTERVAL, 1)

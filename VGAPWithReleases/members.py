@@ -98,7 +98,7 @@ class TimeWindow(Sequence):
         self._start_time = start_time
         self._end_time = end_time
         self.unit_size = unit_size
-        self.length = (end_time - start_time) // unit_size
+        self.length = int((end_time - start_time) // unit_size)
 
     def __getitem__(self, index):
         return self._clients_list[index]
