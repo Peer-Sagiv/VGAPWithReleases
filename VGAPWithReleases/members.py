@@ -27,7 +27,11 @@ class Client:
         if random_demands:
             return cls(int(entry["start_time"]), int(entry["end_time"]), [random.uniform(0.01, 0.5), random.uniform(0.01, 0.5)], float(entry["value"]))
         return cls(int(entry["start_time"]), int(entry["end_time"]), [float(entry["max_cpus"]), float(entry["max_memory"])], float(entry["value"]))
-    
+
+    @classmethod
+    def from_azure_entry(cls, entry):
+        return cls(int(entry["start_time"]), int(entry["end_time"]), [float(entry["core"]), float(entry["memory"]), float(entry["ssd"]), float(entry["nic"])], float(entry["value"]))
+
     @classmethod
     def from_presaved_entry(cls, entry):
         return cls(int(entry["start_time"]), int(entry["end_time"]), [float(d) for d in json.loads(entry["demands"])], float(entry["value"]))
