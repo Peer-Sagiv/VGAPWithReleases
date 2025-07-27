@@ -2,7 +2,7 @@ import sqlite3
 import pandas as pd
 import random
 from consts import *
-from members import Client
+from members import Client, TimeWindow
 import numpy as np
 
 # For now, use data from the 14 measurement days. I don't like using the previous data,
@@ -73,21 +73,29 @@ def give_value_by_theta(inst, theta, pareto_alpha):
     inst["value"] = multiplier * (inst['memory'] + inst['ssd'] + inst['core'] + inst['nic']) * inst_d
 
 
-def process_azure_data(theta, required_time, pareto_alpha, parallel_time=False):
+def process_azure_data(theta, required_time, history_time, pareto_alpha, parallel_time=False):
+    if parallel_time and history_time != required_time:
+        raise ValueError("Parallel can't run with history time different than required time")
     original_required_time = required_time
     required_time *= AZURE_TIME_INTERVAL
     if parallel_time:
         base_time = AZURE_TIME_PARALLEL_DAYS / AZURE_TIME_INTERVAL
     else:
         base_time = AZURE_TIME_INTERVAL_DAYS / AZURE_TIME_INTERVAL
-    max_query_interval = base_time - 3 * required_time 
+    max_query_interval = base_time - 2 * required_time - history_time
     current_query_time = random.uniform(1, max_query_interval) * AZURE_TIME_INTERVAL
 
+    history_start = current_query_time
+    history_end = history_start + required_time
+    first_interval_values = get_assignments_starting_between(DB_NAME, current_query_time, history_time).to_dict(orient='records')
 
-    first_interval_values = get_assignments_starting_between(DB_NAME, current_query_time, required_time).to_dict(orient='records')
     if parallel_time:
+        online_start = current_query_time + AZURE_TIME_PARALLEL_DAYS
+        online_end = online_start + required_time
         second_interval_values = get_assignments_starting_between(DB_NAME, current_query_time + AZURE_TIME_PARALLEL_DAYS, required_time).to_dict(orient='records')
     else:
+        online_start = current_query_time + required_time
+        online_end = online_start + required_time
         second_interval_values = get_assignments_starting_between(DB_NAME, current_query_time + required_time, required_time).to_dict(orient='records')
 
     # third_interval_values = get_assignments_starting_between(DB_NAME, current_query_time + required_time * 2, required_time)
@@ -121,5 +129,4 @@ def process_azure_data(theta, required_time, pareto_alpha, parallel_time=False):
     clients = [Client.from_azure_entry(entry) for entry in online_set]
     # test_values = [Client.from_csv_entry(entry) for entry in test_set]
 
-    return history, clients
-    
+    return TimeWindow(history, history_start, history_end, 1), TimeWindow(clients, online_start, online_end, 1)

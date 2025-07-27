@@ -1,6 +1,6 @@
 import sys
 import json
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import shutil
 import csv
 from collections import defaultdict
@@ -12,7 +12,10 @@ from simpleAlgs import FirstFitAlg, BestFitAlg, RandomOrderAlg, WorstFitAlg
 from optAlg import OPTAlg
 
 from parse_raw_data import create_random_test_sample
+from parse_azure_data import process_azure_data
 from consts import *
+
+import argparse
 
 GOOGLE_CLUSTERS_TIME_INTERVAL = 1_000_000
 LOAD_RANDOM_DEMANDS = False
@@ -20,11 +23,11 @@ TESTS_PER_TARGET = 10
 
 # with open("clean_1000_rounds_valued.json") as f:
 #     rounds = json.load(f)
-#     CLIENTS = [Client.from_json_entry(entry) for entry in rounds] 
+#     CLIENTS = [Client.from_json_entry(entry) for entry in rounds]
 
 # with open("clean_1000_history_valued.json") as f:
 #     rounds = json.load(f)
-#     HISTORY_SET = [Client.from_json_entry(entry) for entry in rounds] 
+#     HISTORY_SET = [Client.from_json_entry(entry) for entry in rounds]
 
 def write_values(name, clients):
     values = [c.to_dict() for c in clients]
@@ -52,7 +55,7 @@ def print_all_results(res_dir="."):
 # with open("current_history.csv") as f:
 #     raw_data = csv.DictReader(f)
 #     HISTORY_SET = [Client.from_presaved_entry(entry) for entry in raw_data]
-    
+
 
 # with open("current_clients.csv") as f:
 #     raw_data = csv.DictReader(f)
@@ -68,14 +71,23 @@ def handle_cls_context(cls, name, *args, log_results=False):
     del instance
     return value
 
+def get_test_sample_from_source(theta, required_time, history_time, pareto_alpha, azure=False, parallel=False):
+    if azure:
+        return process_azure_data(theta, required_time, history_time, pareto_alpha, parallel_time=parallel)
+    return create_random_test_sample(theta, required_time, history_time, pareto_alpha)
 
-def run_all(history, clients, test_set, machines, required_time, run_simple_alg=False, log_results=False):
+
+def run_all(large_history, clients, machines, run_simple_alg=False, log_results=False):
+
+
+    history, older_history = large_history.get_latest_from_window(clients.length)
+
     values = {}
     # print("Calculating our algs")
     if run_simple_alg:
-        values[VGAPWD_NAME] = handle_cls_context(VGAPWD, VGAPWD_NAME, history, machines, clients, required_time, log_results=log_results)
-    values[VMKPSD_NAME] = handle_cls_context(VMKPSD, VMKPSD_NAME, history, machines, clients, required_time, 1, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
-    values[VMKPSDWH_NAME] = handle_cls_context(VMKPSDWH, VMKPSDWH_NAME, history, test_set, machines, clients, required_time, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
+        values[VGAPWD_NAME] = handle_cls_context(VGAPWD, VGAPWD_NAME, history, machines, clients, log_results=log_results)
+    values[VMKPSD_NAME] = handle_cls_context(VMKPSD, VMKPSD_NAME, history, machines, clients, 0.5, log_results=log_results)
+    values[VMKPSDWH_NAME] = handle_cls_context(VMKPSDWH, VMKPSDWH_NAME, large_history, history, machines, clients, log_results=log_results)
 
 
     # print("calculating simple")
@@ -172,54 +184,154 @@ def plot_relative_result(results_path):
 #     plt.tight_layout()
 #     plt.show()
 
-def run_test(theta, required_time, num_machines, run_simple_alg, log_results, name):
-    results_dir = Path(".") / name
+# def run_test(theta, required_time, num_machines, run_simple_alg, log_results, name):
+#     results_dir = Path(".") / name
+#     results_dir.mkdir(exist_ok=True, parents=True)
+#     test_result = defaultdict(lambda: 0)
+#     machines = [Machine([1, 1]) for _ in range(num_machines)]
+#     for i in range(TESTS_PER_TARGET):
+#         curr_res_path = results_dir / f"run_{i + 1}"
+#         # print("Creating sample")
+#         history, clients = create_random_test_sample(theta, required_time)
+#         while history is None:
+#             # print("Sample size too small. Creating new sample")
+#             history, clients = create_random_test_sample(theta, required_time)
+#         # print("Running sample")
+#         results = run_all(history, clients[:10], machines[:10], required_time, run_simple_alg=run_simple_alg, log_results=log_results)
+#         with open(curr_res_path, "w") as f:
+#             json.dump(results, f)
+#         for res in results:
+#             test_result[res] += results[res]
+#     final_res_path = results_dir / f"final"
+#     with open(final_res_path, "w") as f:
+#         json.dump(final_res_path, f)
+
+#theta = int(sys.argv[1])
+#required_time_online = int(sys.argv[2])
+#required_time_history = int(sys.argv[3])
+#required_time_older_history = int(sys.argv[4])
+#num_machines = int(sys.argv[5])
+#run_simple_alg = sys.argv[6].lower() == "true"
+#log_results = sys.argv[7].lower() == "true"
+#name = sys.argv[8]
+#trial = int(sys.argv[9])
+#if len(sys.argv) > 10:
+#    pareto_alpha = float(sys.argv[10])
+#else:
+#    pareto_alpha = None
+#
+#results_dir = Path(name)
+#results_dir.mkdir(exist_ok=True, parents=True)
+#curr_res_path = results_dir / f"run_{trial}"
+#
+#machines = [Machine([1, 1]) for _ in range(num_machines)]
+#
+## print("Creating sample")
+#
+#total_history = required_time_history + required_time_older_history
+#large_history, clients = create_random_test_sample(theta, required_time_online, total_history, pareto_alpha)
+#while large_history is None:
+#    print("Sample too small. Retrying...")
+#    large_history, clients = create_random_test_sample(theta, required_time_online, total_history, pareto_alpha)
+#
+## print("Running sample")
+#
+#history, older_history = large_history.get_latest_from_window(required_time_history)
+#
+#results = run_all(older_history, history, clients,  machines, run_simple_alg=run_simple_alg, log_results=log_results)
+#
+#with open(curr_res_path, "w") as f:
+#    json.dump(results, f)
+import math
+import argparse
+import json
+from pathlib import Path
+
+def main():
+    parser = argparse.ArgumentParser(description="Run algorithm tests with specified parameters.")
+
+    parser.add_argument("theta", type=int, help="Theta parameter")
+    parser.add_argument("required_time_online", type=int, help="Required time for online computations")
+    parser.add_argument("required_time_history", type=int, help="Required time for history window")
+    parser.add_argument("required_time_older_history", type=int, help="Required time for older history window")
+    parser.add_argument("num_machines", type=int, help="Number of machines to simulate (overridden if --load is set)")
+    parser.add_argument("machine_size", type=float, help="Size parameter for machines")
+    parser.add_argument(
+        "dimensions", type=int, nargs="?", default=2,
+        help="Number of dimensions for machine resource vector (default: 2)"
+    )
+    parser.add_argument("run_simple_alg", type=lambda x: x.lower() == "true", help="Run simple algorithms (true/false)")
+    parser.add_argument("log_results", type=lambda x: x.lower() == "true", help="Log results (true/false)")
+    parser.add_argument("name", type=str, help="Name for results directory")
+    parser.add_argument("trial", type=int, help="Trial iteration number")
+    parser.add_argument("--pareto_alpha", type=float, default=None,
+                        help="Pareto alpha parameter (optional)")
+    parser.add_argument("--load", type=float, default=None,
+                        help="Requested load (optional). Overrides num_machines based on clients max load.")
+    parser.add_argument("--azure", type=bool, default=False,
+                        help="Load azure data.")
+    parser.add_argument("--parallel", type=bool, default=False,
+                        help="Use parallel history (Azure only).")
+
+    args = parser.parse_args()
+
+    results_dir = Path(args.name)
     results_dir.mkdir(exist_ok=True, parents=True)
-    test_result = defaultdict(lambda: 0)
-    machines = [Machine([1, 1]) for _ in range(num_machines)]
-    for i in range(TESTS_PER_TARGET):
-        curr_res_path = results_dir / f"run_{i + 1}"
-        # print("Creating sample")
-        history, clients = create_random_test_sample(theta, required_time)
-        while history is None:
-            # print("Sample size too small. Creating new sample")
-            history, clients = create_random_test_sample(theta, required_time)
-        # print("Running sample")
-        results = run_all(history, clients[:10], machines[:10], required_time, run_simple_alg=run_simple_alg, log_results=log_results)
-        with open(curr_res_path, "w") as f:
-            json.dump(results, f)
-        for res in results:
-            test_result[res] += results[res]
-    final_res_path = results_dir / f"final"
-    with open(final_res_path, "w") as f:
-        json.dump(final_res_path, f)
+    curr_res_path = results_dir / f"run_{args.trial}"
 
-theta = int(sys.argv[1])
-required_time = int(sys.argv[2])
-num_machines = int(sys.argv[3])
-run_simple_alg = sys.argv[4].lower() == "true"
-log_results = sys.argv[5].lower() == "true"
-name = sys.argv[6]
-trial = int(sys.argv[7])
-if len(sys.argv) > 8:
-    pareto_alpha = float(sys.argv[8])
-else:
-    pareto_alpha = None
+    total_history = args.required_time_history + args.required_time_older_history
+    large_history, clients = get_test_sample_from_source(
+        args.theta,
+        args.required_time_online,
+        total_history,
+        args.pareto_alpha,
+        args.azure,
+        args.parallel
+    )
+    while large_history is None:
+        print("Sample too small. Retrying...")
+        large_history, clients = get_test_sample_from_source(
+            args.theta,
+            args.required_time_online,
+            total_history,
+            args.pareto_alpha,
+            args.azure,
+            args.parallel
+        )
 
-results_dir = Path(name)
-results_dir.mkdir(exist_ok=True, parents=True)
-curr_res_path = results_dir / f"run_{trial}"
+    history, older_history = large_history.get_latest_from_window(args.required_time_history)
 
-machines = [Machine([1, 1]) for _ in range(num_machines)]
+    # Determine number of machines based on load if --load provided
+    num_machines = args.num_machines
+    if args.load is not None:
+        # Compute peak load from clients in the history window
+        max_load = max(clients.compute_load())
 
-# print("Creating sample")
-history, clients = create_random_test_sample(theta, required_time, pareto_alpha)
-while history is None:
-    # print("Sample too small. Retrying...")
-    history, clients, test_set = create_random_test_sample(theta, required_time, pareto_alpha)
+        # Compute required machines to get requested load
+        # requested load means we want to provision "load" fraction of max_load per machine
+        required_machines = math.floor(max_load / (args.machine_size * args.load))
+        if required_machines < 1:
+            required_machines = 1  # At least one machine needed
+        num_machines = required_machines
 
-# print("Running sample")
-results = run_all(history, clients, test_set, machines, required_time, run_simple_alg=run_simple_alg, log_results=log_results)
+        print(f"Computed number of machines needed for load {args.load}: {num_machines}")
 
-with open(curr_res_path, "w") as f:
-    json.dump(results, f)
+    # Create machines using final num_machines
+    machines = [Machine([args.machine_size] * args.dimensions) for _ in range(num_machines)]
+
+    results = run_all(
+        large_history,
+        clients,
+        machines,
+        run_simple_alg=args.run_simple_alg,
+        log_results=args.log_results
+    )
+
+    with open(curr_res_path, "w") as f:
+        json.dump(results, f)
+
+    print(f"Results saved to {curr_res_path}")
+
+if __name__ == "__main__":
+    main()
+

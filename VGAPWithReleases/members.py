@@ -1,5 +1,7 @@
 import random
 import json
+from collections.abc import Sequence
+
 
 # A real value can't be negative
 UNSATISFIABLE_VALUE = -1337
@@ -29,12 +31,12 @@ class Client:
         return cls(int(entry["start_time"]), int(entry["end_time"]), [float(entry["max_cpus"]), float(entry["max_memory"])], float(entry["value"]))
 
     @classmethod
-    def from_azure_entry(cls, entry):
-        return cls(int(entry["start_time"]), int(entry["end_time"]), [float(entry["core"]), float(entry["memory"]), float(entry["ssd"]), float(entry["nic"])], float(entry["value"]))
-
-    @classmethod
     def from_presaved_entry(cls, entry):
         return cls(int(entry["start_time"]), int(entry["end_time"]), [float(d) for d in json.loads(entry["demands"])], float(entry["value"]))
+
+    @classmethod
+    def from_azure_entry(cls, entry):
+        return cls(int(entry["start_time"]), int(entry["end_time"]), [float(entry["core"]), float(entry["memory"]), float(entry["ssd"]), float(entry["nic"])], float(entry["value"]))
 
     @classmethod
     def unsatisfiable_client(cls, dimensions):
@@ -61,7 +63,7 @@ class Machine:
 
     def capacity(self, d):
         return self._capacities[d]
-    
+
     def assign(self, client):
         self._clients += [client]
 
@@ -71,13 +73,13 @@ class Machine:
             for i in range(len(curr_capacities)):
                 curr_capacities[i] -= c.demands[i]
         return curr_capacities
-    
+
     def check_feasible(self, client):
         for i, cap in enumerate(self._calc_cur_capacities()):
             if client.demands[i] > cap:
                 return False
         return True
-    
+
     def calc_residue(self, client):
         residue = None
         for i, capacity in enumerate(self._calc_cur_capacities()):
@@ -89,3 +91,195 @@ class Machine:
 
     def flush(self, client):
         self._clients = [c for c in self._clients if c.departure_time > client.assign_time]
+
+class TimeWindow(Sequence):
+    def __init__(self, clients_list, start_time, end_time, unit_size):
+        self._clients_list = clients_list
+        self._start_time = start_time
+        self._end_time = end_time
+        self.unit_size = unit_size
+        self.length = (end_time - start_time) // unit_size
+
+    def __getitem__(self, index):
+        return self._clients_list[index]
+
+    def __setitem__(self, index, value):
+        self._clients_list[index] = value
+
+    def __len__(self):
+        return len(self._clients_list)
+
+    def __iter__(self):
+        return iter(self._clients_list)
+
+    def __repr__(self):
+        return repr(self._clients_list)
+
+    def __iadd__(self, other):
+        if isinstance(other, list):
+            self._clients_list.extend(other)
+            return self
+        elif isinstance(other, TimeWindow):
+            self._clients_list.extend(other._clients_list)
+            return self
+        else:
+            raise TypeError(f"Cannot add type {type(other)} to History")
+
+    def sort(self, *args, **kwargs):
+        self._clients_list.sort(*args, **kwargs)
+
+
+    def get_latest_from_window(self, required_time):
+        """
+        Returns a tuple:
+          - First element: a TimeWindow object for the latest window
+          - Second element: a TimeWindow object for the remaining earlier part
+        """
+        history_interval_time = required_time * self.unit_size
+        window_start = self._end_time - history_interval_time
+
+        latest = [client for client in self._clients_list if client.assign_time >= window_start]
+        earlier = [client for client in self._clients_list if client.assign_time < window_start]
+
+        latest_window = TimeWindow(latest, window_start, self._end_time, unit_size=self.unit_size)
+        remaining_window = TimeWindow(earlier, self._start_time, window_start, unit_size=self.unit_size)
+
+        return latest_window, remaining_window
+
+
+    def get_random_window(self, required_time):
+        history_interval_time = required_time * self.unit_size
+
+
+        max_query_interval = self._end_time - history_interval_time
+        current_query_time = random.randint(0, max_query_interval) * self.unit_size + self._start_time
+
+        start = current_query_time
+        end = start + history_interval_time
+        return TimeWindow([client for client in self._clients_list if start <= client.assign_time < end], start, end)
+
+    def iter_windows(self, k):
+        """
+        Yield TimeWindow objects of length k * unit_size sliding through the full time window.
+        """
+        window = k * self.unit_size
+        t = self._start_time
+        while t + window <= self._end_time:
+            start = t
+            end = t + window
+            curr_window = TimeWindow(
+                [client for client in self._clients_list if start <= client.assign_time < end],
+                start,
+                end,
+                unit_size=self.unit_size
+            )
+            yield curr_window
+            t += window
+
+
+    def iter_windows_reverse(self, k):
+        """
+        Yield TimeWindow objects of length k * unit_size sliding backwards from end_time to start_time.
+        """
+        window = k * self.unit_size
+        t = self._end_time
+        while t - window >= self._start_time:
+            start = t - window
+            end = t
+            curr_window = TimeWindow(
+                [client for client in self._clients_list if start <= client.assign_time < end],
+                start,
+                end,
+                unit_size=self.unit_size
+            )
+            yield curr_window
+            t -= window
+
+
+    def get_random_window_pair(self, required_time):
+        history_interval_time = required_time * self.unit_size
+
+        max_query_interval = self._end_time - history_interval_time * 2
+        current_query_time = random.randint(0, max_query_interval) * self.unit_size + self._start_time
+        first_start = current_query_time
+        first_end = first_start + history_interval_time
+        second_start = first_end
+        second_end = first_end + history_interval_time
+        window1 = TimeWindow([client for client in self._clients_list if first_start <= client.assign_time < first_end], first_start, first_end)
+        window2 = TimeWindow([client for client in self._clients_list if second_start <= client.assign_time < second_end], second_start, second_end)
+
+        return window1, window2
+
+
+    def iter_window_pairs(self, k, step=None):
+        """
+        Yield (TimeWindow, TimeWindow) pairs with windows of length k * self.unit_size.
+        """
+        window = k * self.unit_size
+        real_step = window
+        if step:
+            real_step = step * self.unit_size
+
+        t = self._start_time
+        while t + 2 * window <= self._end_time:
+            first_start = t
+            first_end = t + window
+            second_start = first_end
+            second_end = first_end + window
+
+            window1 = TimeWindow(
+                [client for client in self._clients_list if first_start <= client.assign_time < first_end],
+                first_start,
+                first_end
+            )
+            window2 = TimeWindow(
+                [client for client in self._clients_list if second_start <= client.assign_time < second_end],
+                second_start,
+                second_end
+            )
+            yield window1, window2
+            t += real_step
+
+
+    def compute_load(self):
+        """
+        Compute the peak resource load over the time window based on clients.
+
+        Returns:
+            A tuple of floats representing the maximum load per resource dimension observed.
+            The length of the tuple corresponds to the number of resource dimensions.
+        """
+        events = []
+        for client in self._clients_list:
+            # Using assign_time as start, departure_time as end
+            events.append((client.assign_time, 'start', client))
+            events.append((client.departure_time, 'end', client))
+
+        # Sort events by time; for same time, 'end' events before 'start'
+        events.sort(key=lambda x: (x[0], 0 if x[1] == 'end' else 1))
+
+        if not self._clients_list:
+            return tuple()  # No clients, so no load
+
+        # Number of resource dimensions (assumes all clients have the same length demands)
+        num_dims = len(self._clients_list[0].demands)
+
+        current_load = [0.0] * num_dims
+        max_load = [0.0] * num_dims
+
+        for _, event_type, client in events:
+            demands = client.demands
+
+            if event_type == 'end':
+                for i in range(num_dims):
+                    current_load[i] -= demands[i]
+            else:
+                for i in range(num_dims):
+                    current_load[i] += demands[i]
+
+            for i in range(num_dims):
+                if current_load[i] > max_load[i]:
+                    max_load[i] = current_load[i]
+
+        return tuple(max_load)
+

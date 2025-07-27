@@ -3,7 +3,7 @@ import numpy as np
 import random
 from collections import defaultdict
 from consts import *
-from members import Client
+from members import Client, TimeWindow
 
 def get_concated_instance(inst):
     ordered_inst = {}
@@ -74,9 +74,11 @@ def count_intersections(intervals):
 def get_average_duration(demands):
     return sum([int(v['end_time']) - int(v['start_time']) for v in demands]) / len(demands)
 
-def create_random_test_sample(theta, required_time, pareto_alpha):
+
+def create_random_test_sample(theta, required_time, history_time, pareto_alpha):
     required_interval_time = required_time * GOOGLE_CLUSTERS_TIME_INTERVAL
-    max_query_interval = ((QUERY_END_TIME - QUERY_START_TIME) // GOOGLE_CLUSTERS_TIME_INTERVAL) - 4 * required_time
+    history_interval_time = history_time * GOOGLE_CLUSTERS_TIME_INTERVAL
+    max_query_interval = ((QUERY_END_TIME - QUERY_START_TIME) // GOOGLE_CLUSTERS_TIME_INTERVAL) - 2 * required_time - history_time
 
     with open(COMBINED_A_RUNS) as f:
         raw_data = csv.DictReader(f)
@@ -88,7 +90,7 @@ def create_random_test_sample(theta, required_time, pareto_alpha):
             instances[inst["instance_index"], inst["collection_id"]].append(inst)
 
     flattened_instances = []
-    
+
     for raw_instance_key in instances:
         for entry in instances[raw_instance_key]:
             # parse and store each entry directly
@@ -103,37 +105,35 @@ def create_random_test_sample(theta, required_time, pareto_alpha):
 
     filtered = [inst for inst in flattened_instances if inst['max_cpus'] <= 0.5 and inst['max_memory'] <= 0.5]
 
-    first_interval_values = [inst for inst in filtered if current_query_time <= inst['start_time'] < current_query_time + required_interval_time]
-    second_interval_values = [inst for inst in filtered if current_query_time + required_interval_time <= inst['start_time'] < current_query_time + required_interval_time * 2]
-    third_interval_values = [inst for inst in filtered if current_query_time + required_interval_time * 2 <= inst['start_time'] < current_query_time + required_interval_time * 3]
+    history_start = current_query_time
+    history_end = current_query_time + history_interval_time
+    online_start = history_end
+    online_end = history_end + required_interval_time
+    first_interval_values = [inst for inst in filtered if history_start <= inst['start_time'] < history_end]
+    second_interval_values = [inst for inst in filtered if online_start <= inst['start_time'] < online_end]
 
-    if len(first_interval_values) < MIN_SAMPLE_SIZE or len(second_interval_values) < MIN_SAMPLE_SIZE or len(third_interval_values) < MIN_SAMPLE_SIZE:
-        return None, None, None
+    if len(first_interval_values) < MIN_SAMPLE_SIZE or len(second_interval_values) < MIN_SAMPLE_SIZE:
+        return None, None
 
     first_interval_values.sort(key=lambda x: int(x['start_time']))
     second_interval_values.sort(key=lambda x: int(x['start_time']))
-    third_interval_values.sort(key=lambda x: int(x['start_time']))
 
     fix_max_end_time(first_interval_values, required_interval_time)
     fix_max_end_time(second_interval_values, required_interval_time)
-    fix_max_end_time(third_interval_values, required_interval_time)
 
     # After fixing the times, we are left with assignments which may start and end at the same time. Remove them
     first_interval_values = [value for value in first_interval_values if int(value['start_time']) != int(value['end_time'])]
     second_interval_values = [value for value in second_interval_values if int(value['start_time']) != int(value['end_time'])]
-    third_interval_values = [value for value in third_interval_values if int(value['start_time']) != int(value['end_time'])]
-    history_set, online_set, test_set = first_interval_values, second_interval_values, third_interval_values
+    history_set, online_set = first_interval_values, second_interval_values
     for inst in history_set:
         give_value_by_theta(inst, theta, pareto_alpha)
 
     for inst in online_set:
         give_value_by_theta(inst, theta, pareto_alpha)
-    
-    for inst in test_set:
-        give_value_by_theta(inst, theta, pareto_alpha)
+
 
     history = [Client.from_csv_entry(entry) for entry in history_set]
     clients = [Client.from_csv_entry(entry) for entry in online_set]
-    test_values = [Client.from_csv_entry(entry) for entry in test_set]
 
-    return history, clients, test_values
+    return TimeWindow(history, history_start, history_end, GOOGLE_CLUSTERS_TIME_INTERVAL), TimeWindow(clients, online_start, online_end, GOOGLE_CLUSTERS_TIME_INTERVAL)
+

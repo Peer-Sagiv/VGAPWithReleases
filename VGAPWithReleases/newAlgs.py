@@ -4,6 +4,7 @@ from typing import List
 from pulp import *
 from members import Machine, Client
 from consts import *
+from parse_raw_data import TimeWindow
 
 SLOTS = 2000
 class VGAPWD:
@@ -13,12 +14,12 @@ class VGAPWD:
         self._current_clients_in_interval = []
         self._history_set = copy.deepcopy(history_set)
         self._dimension = len(clients[0].demands)
-        self._num_intervals = num_intervals
+        self._num_intervals = clients.length
         self._machines = machines
         self._current_assign_time = min(client.assign_time for client in self._clients) - 1
         self._value = 0
         self._alpha = alpha
-        self._max_time_request = num_intervals * time_interval
+        self._max_time = 2 * self._num_intervals * clients.unit_size
         self._current_index = 0
         self._current_random_index = 0
         self._pre_process_data()
@@ -30,7 +31,7 @@ class VGAPWD:
         # print(f"History set size is {len(self._history_set)}")
         chosen_history: List['Client'] = random.sample(self._history_set, self._num_intervals * self._slot_count)
         return [h for h in chosen_history if h.is_satisfible]
-    
+
     def _pre_step_update_history(self, client: 'Client'):
         if client.assign_time > self._current_assign_time:
             # print("Creating new set of dummies")
@@ -40,7 +41,7 @@ class VGAPWD:
             self._random_sample_for_current_interval.sort()
             self._current_index = 0
             self._current_random_index = 0
-        
+
         prev_random_index = self._current_random_index
         self._current_random_index = self._random_sample_for_current_interval[self._current_index]
         self._current_index += 1
@@ -62,7 +63,7 @@ class VGAPWD:
             prob += lpSum(x[(c, s)] for s in self._machines) <= 1
         for s in self._machines:
             for d in range(self._dimension):
-                prob += lpSum(c.demands[d] * ((c.departure_time - c.assign_time) / self._max_time_request) * x[(c, s)] for c in history_set) <= s.capacity(d) * self._alpha
+                prob += lpSum(c.demands[d] * (c.departure_time - c.assign_time) * x[(c, s)] for c in history_set) <= self._max_time * s.capacity(d) * self._alpha
 
         prob.solve(PULP_CBC_CMD(msg=0))
         probs = [(s, x[(client, s)].varValue) for s in self._machines]
@@ -96,14 +97,23 @@ class VMKPSD(VGAPWD):
         history_set: List['Client'] = self._get_history_set() + [client]
         for s in self._machines:
             s.flush(client)
+
+        available = 0
+        for s in self._machines:
+            if s.check_feasible(client):
+                available = 1
+
+        if not available:
+            return
+
         prob = LpProblem("VectorMultipleKnapsackWithDepartures", LpMaximize)
 
         x = LpVariable.dicts("y", ((c) for c in history_set), lowBound=0, upBound=1)
         prob += lpSum(c.value * x[(c)] for c in history_set)
 
         for d in range(self._dimension):
-            prob += lpSum(c.demands[d] * ((c.departure_time - c.assign_time) / self._max_time_request) * x[(c)] for c in history_set) <= len(self._machines) * self._alpha
-        
+            prob += lpSum(c.demands[d] * (c.departure_time - c.assign_time) * x[(c)] for c in history_set) <= self._max_time * sum(s.capacity(d) for s in self._machines) * self._alpha
+
         prob.solve(PULP_CBC_CMD(msg=0))
         probability = x[(client)].varValue
         if probability < random.random():
@@ -119,20 +129,53 @@ class VMKPSD(VGAPWD):
 
 
 class VMKPSDWH:
-    def __init__(self, history_set, test_set, machines, clients, num_intervals):
+    def __init__(self, larger_history, history_set, machines, clients):
+        self._larger_history = larger_history
         self._history_set = history_set
-        self._test_set = test_set
         self._machines = machines
         self._clients = clients
-        self._num_intervalse = num_intervals
-        self._alphas = [0.1, 0.5, 1, 1.5, 2]
-        
+        self._num_intervals = clients.length
+        self._alphas = [0.125, 0.25, 0.5, 1]
+
+    #def calc_value(self):
+    #    best_alpha, best_val = None, -1
+    #    for alpha in self._alphas:
+    #        inst = VMKPSD(self._older_history_set, self._machines, self._history_set, alpha)
+    #        val = inst.calc_value()
+    #        if val > best_val:
+    #            best_alpha = alpha
+    #    inst = VMKPSD(self._history_set, self._machines, self._clients, best_alpha)
+    #    return inst.calc_value()
+
     def calc_value(self):
-        best_alpha, best_val = None, -1
-        for alpha in self._alphas:
-            inst = VMKPSD(self._history_set, self._machines, self._test_set, self._num_intervalse, alpha)
-            val = inst.calc_value()
-            if val > best_val:
-                best_alpha = alpha
-        inst = VMKPSD(self._history_set, self._machines, self._clients, self._num_intervalse, best_alpha)
+        k = self._history_set.length  # window size
+
+        alpha_values = {alpha: [] for alpha in self._alphas}
+
+
+        n_trials = 0
+
+        for win1, win2 in self._larger_history.iter_window_pairs(k):
+            #print("tiral", n_trials)
+            n_trials += 1
+            for alpha in self._alphas:
+                inst = VMKPSD(win1, self._machines, win2, alpha)
+                val = inst.calc_value()
+                alpha_values[alpha].append(val)
+            #print(alpha_values)
+        # Count wins per alpha by seeing which alpha has the highest val per window
+        wins_count = {alpha: 0 for alpha in self._alphas}
+
+        for i in range(n_trials):
+            vals_at_i = [(alpha, alpha_values[alpha][i]) for alpha in self._alphas]
+            max_val = max(v[1] for v in vals_at_i)
+            winners = [alpha for alpha, val in vals_at_i if val == max_val]
+            winner_alpha = max(winners)  # tie-break by largest alpha
+            wins_count[winner_alpha] += 1
+
+        max_wins = max(wins_count.values())
+        candidates = [alpha for alpha, count in wins_count.items() if count == max_wins]
+        best_alpha = max(candidates)
+
+        inst = VMKPSD(self._history_set, self._machines, self._clients, best_alpha)
         return inst.calc_value()
