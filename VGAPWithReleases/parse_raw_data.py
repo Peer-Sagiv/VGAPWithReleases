@@ -28,10 +28,16 @@ def get_instance_by_start_time(instances):
     return instances_by_time
 
 
-def fix_max_end_time(values, time_interval):
+def fix_max_end_time(values, time_interval, theta, pareto_alpha):
+    clients = []
     for value in values:
         if int(value['end_time']) - int(value['start_time']) > time_interval:
             value['end_time'] = int(value['start_time']) + time_interval
+        if int(value['start_time']) == int(value['end_time']):
+            continue
+        give_value_by_theta(value, theta, pareto_alpha)
+        clients.append(Client.from_csv_entry(value))
+    return clients
 
 def get_history_and_online_set(first_values, second_values):
     """
@@ -118,22 +124,8 @@ def create_random_test_sample(theta, required_time, history_time, pareto_alpha):
     first_interval_values.sort(key=lambda x: int(x['start_time']))
     second_interval_values.sort(key=lambda x: int(x['start_time']))
 
-    fix_max_end_time(first_interval_values, required_interval_time)
-    fix_max_end_time(second_interval_values, required_interval_time)
-
-    # After fixing the times, we are left with assignments which may start and end at the same time. Remove them
-    first_interval_values = [value for value in first_interval_values if int(value['start_time']) != int(value['end_time'])]
-    second_interval_values = [value for value in second_interval_values if int(value['start_time']) != int(value['end_time'])]
-    history_set, online_set = first_interval_values, second_interval_values
-    for inst in history_set:
-        give_value_by_theta(inst, theta, pareto_alpha)
-
-    for inst in online_set:
-        give_value_by_theta(inst, theta, pareto_alpha)
-
-
-    history = [Client.from_csv_entry(entry) for entry in history_set]
-    clients = [Client.from_csv_entry(entry) for entry in online_set]
+    history = fix_max_end_time(first_interval_values, required_interval_time, theta, pareto_alpha)
+    clients = fix_max_end_time(second_interval_values, required_interval_time, theta, pareto_alpha)
 
     return TimeWindow(history, history_start, history_end, GOOGLE_CLUSTERS_TIME_INTERVAL), TimeWindow(clients, online_start, online_end, GOOGLE_CLUSTERS_TIME_INTERVAL)
 

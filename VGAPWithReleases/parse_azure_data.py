@@ -10,8 +10,7 @@ import numpy as np
 
 AZURE_TIME_INTERVAL_DAYS = 14
 AZURE_TIME_PARALLEL_DAYS = 7
-AZURE_TIME_INTERVAL = 0.0001 # 0.0024 hours = 8.64 seconds
-MIN_VALID_TIME_REQUEST = 0.001
+AZURE_TIME_INTERVAL = 0.0004 # 0.0024 hours = 8.64 seconds
 DB_NAME = "packing_trace_zone_a_v1.sqlite"
 
 
@@ -19,26 +18,24 @@ def get_assignments_starting_between(db_path, t, l):
     # Compute window end
     t_end = t + l
 
-    # Connect to the database
     conn = sqlite3.connect(db_path)
 
-    # SQL query: get VMs that start in [t, t + l)
-    query = f"""
+    query = """
     SELECT
-        vm.starttime as start_time,
-        vm.endtime as end_time,
+        v.starttime AS start_time,
+        v.endtime AS end_time,
         vt.core,
         vt.memory,
         vt.ssd,
         vt.nic
     FROM
-        vm
+        vm AS v
     JOIN
-        vmType vt ON vm.vmTypeId = vt.vmTypeId
+        vmType AS vt ON v.vmTypeId = vt.vmTypeId
     WHERE
-        vm.starttime >= {t}
-        AND vm.starttime < {t_end}
-        AND vm.endtime IS NOT NULL
+        v.starttime >= ?
+        AND v.starttime < ?
+        AND v.endtime IS NOT NULL
         AND vt.memory IS NOT NULL
         AND vt.ssd IS NOT NULL
         AND vt.nic IS NOT NULL
@@ -46,21 +43,29 @@ def get_assignments_starting_between(db_path, t, l):
         AND vt.memory <= 0.5
         AND vt.ssd <= 0.5
         AND vt.nic <= 0.5
-        AND vt.core <= 0.5;
+        AND vt.core <= 0.5
+    ORDER BY
+        v.starttime ASC
     """
 
-    # Execute query and return as DataFrame
-    df = pd.read_sql_query(query, conn)
+    print("executing")
+    df = pd.read_sql_query(query, conn, params=(t, t_end))
+
+    print("after executing")
     conn.close()
 
     return df
 
-def fix_times(values, time_interval):
+def post_process_entry(values, time_interval, theta, pareto_alpha):
+    clients = []
     for value in values:
         value['end_time'] = int(value['end_time'] / AZURE_TIME_INTERVAL)
         value['start_time'] = int(value['start_time'] / AZURE_TIME_INTERVAL)
         if value['end_time'] - value['start_time'] > time_interval:
             value['end_time'] = value['start_time'] + time_interval
+        give_value_by_theta(value, theta, pareto_alpha)
+        clients.append(Client.from_azure_entry(value))
+    return clients
 
 
 def give_value_by_theta(inst, theta, pareto_alpha):
@@ -98,35 +103,10 @@ def process_azure_data(theta, required_time, history_time, pareto_alpha, paralle
         online_end = online_start + required_time
         second_interval_values = get_assignments_starting_between(DB_NAME, current_query_time + required_time, required_time).to_dict(orient='records')
 
-    # third_interval_values = get_assignments_starting_between(DB_NAME, current_query_time + required_time * 2, required_time)
-
-    # if len(first_interval_values) < MIN_SAMPLE_SIZE or len(second_interval_values) < MIN_SAMPLE_SIZE or len(third_interval_values) < MIN_SAMPLE_SIZE:
-    #     return None, None, None
-
     if len(first_interval_values) < MIN_SAMPLE_SIZE or len(second_interval_values) < MIN_SAMPLE_SIZE:
         return None, None
 
-    first_interval_values.sort(key=lambda x: int(x['start_time']))
-    second_interval_values.sort(key=lambda x: int(x['start_time']))
-    # third_interval_values.sort(key=lambda x: int(x['start_time']))
-
-    fix_times(first_interval_values, original_required_time)
-    fix_times(second_interval_values, original_required_time)
-    # fix_max_end_time(third_interval_values, required_time)
-
-    # history_set, online_set, test_set = first_interval_values, second_interval_values, third_interval_values
-    history_set, online_set = first_interval_values, second_interval_values
-    for inst in history_set:
-        give_value_by_theta(inst, theta, pareto_alpha)
-
-    for inst in online_set:
-        give_value_by_theta(inst, theta, pareto_alpha)
-    
-    # for inst in test_set:
-    #     give_value_by_theta(inst, theta, pareto_alpha)
-
-    history = [Client.from_azure_entry(entry) for entry in history_set]
-    clients = [Client.from_azure_entry(entry) for entry in online_set]
-    # test_values = [Client.from_csv_entry(entry) for entry in test_set]
+    history = post_process_entry(first_interval_values, original_required_time, theta, pareto_alpha)
+    clients = post_process_entry(second_interval_values, original_required_time, theta, pareto_alpha)
 
     return TimeWindow(history, history_start, history_end, 1), TimeWindow(clients, online_start, online_end, 1)
