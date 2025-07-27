@@ -10,7 +10,7 @@ import numpy as np
 
 AZURE_TIME_INTERVAL_DAYS = 14
 AZURE_TIME_PARALLEL_DAYS = 7
-AZURE_TIME_INTERVAL = 0.0001
+AZURE_TIME_INTERVAL = 0.0001 # 0.0024 hours = 8.64 seconds
 MIN_VALID_TIME_REQUEST = 0.001
 DB_NAME = "packing_trace_zone_a_v1.sqlite"
 
@@ -38,35 +38,33 @@ def get_assignments_starting_between(db_path, t, l):
     WHERE
         vm.starttime >= {t}
         AND vm.starttime < {t_end}
-        AND vm.endtime IS NOT NULL;
+        AND vm.endtime IS NOT NULL
+        AND vt.memory IS NOT NULL
+        AND vt.ssd IS NOT NULL
+        AND vt.nic IS NOT NULL
+        AND vt.core IS NOT NULL
+        AND vt.memory <= 0.5
+        AND vt.ssd <= 0.5
+        AND vt.nic <= 0.5
+        AND vt.core <= 0.5;
     """
 
     # Execute query and return as DataFrame
     df = pd.read_sql_query(query, conn)
     conn.close()
 
-    filtered_df = df[
-    df['memory'].notnull() &
-    df['ssd'].notnull() &
-    df['nic'].notnull() &
-    df['core'].notnull() &
-    (df['memory'] <= 0.5) &
-    (df['ssd'] <= 0.5) &
-    (df['core'] <= 0.5) &
-    (df['nic'] <= 0.5)]
-
-    return filtered_df
+    return df
 
 def fix_times(values, time_interval):
     for value in values:
-        if int(value['end_time']) - int(value['start_time']) > time_interval:
-            value['end_time'] = int(value['start_time']) + time_interval
-        value['end_time'] /= AZURE_TIME_INTERVAL
-        value['start_time'] /= AZURE_TIME_INTERVAL
+        value['end_time'] = int(value['end_time'] / AZURE_TIME_INTERVAL)
+        value['start_time'] = int(value['start_time'] / AZURE_TIME_INTERVAL)
+        if value['end_time'] - value['start_time'] > time_interval:
+            value['end_time'] = value['start_time'] + time_interval
 
 
 def give_value_by_theta(inst, theta, pareto_alpha):
-    inst_d = (int(inst['end_time']) - int(inst['start_time'])) / AZURE_TIME_INTERVAL
+    inst_d = inst['end_time'] - inst['start_time']
     if not pareto_alpha:
         # TODO: Random int? Why not random float?
         multiplier = random.randint(1, theta)
@@ -76,13 +74,13 @@ def give_value_by_theta(inst, theta, pareto_alpha):
 
 
 def process_azure_data(theta, required_time, pareto_alpha, parallel_time=False):
-    if required_time < MIN_VALID_TIME_REQUEST:
-        return None, None
+    original_required_time = required_time
+    required_time *= AZURE_TIME_INTERVAL
     if parallel_time:
         base_time = AZURE_TIME_PARALLEL_DAYS / AZURE_TIME_INTERVAL
     else:
         base_time = AZURE_TIME_INTERVAL_DAYS / AZURE_TIME_INTERVAL
-    max_query_interval = base_time - 4 * required_time
+    max_query_interval = base_time - 3 * required_time 
     current_query_time = random.uniform(1, max_query_interval) * AZURE_TIME_INTERVAL
 
 
@@ -104,8 +102,8 @@ def process_azure_data(theta, required_time, pareto_alpha, parallel_time=False):
     second_interval_values.sort(key=lambda x: int(x['start_time']))
     # third_interval_values.sort(key=lambda x: int(x['start_time']))
 
-    fix_times(first_interval_values, required_time)
-    fix_times(second_interval_values, required_time)
+    fix_times(first_interval_values, original_required_time)
+    fix_times(second_interval_values, original_required_time)
     # fix_max_end_time(third_interval_values, required_time)
 
     # history_set, online_set, test_set = first_interval_values, second_interval_values, third_interval_values
