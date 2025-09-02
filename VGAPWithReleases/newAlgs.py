@@ -38,7 +38,6 @@ class VGAPWD:
 
     def _pre_step_update_history(self, client: 'Client'):
         if client.assign_time > self._current_assign_time:
-            # print("Creating new set of dummies")
             self._current_assign_time = client.assign_time
             number_of_clients_in_interval = sum(1 for c in self._clients if c.assign_time == self._current_assign_time)
             self._random_sample_for_current_interval = random.sample(range(SLOTS), number_of_clients_in_interval)
@@ -50,15 +49,17 @@ class VGAPWD:
         self._current_random_index = self._random_sample_for_current_interval[self._current_index]
         self._current_index += 1
         number_of_dummies = self._current_random_index - prev_random_index
-        # print(f"Number of dummies is {number_of_dummies}")
         self._number_of_dummies += number_of_dummies
-        #self._history_set += [Client.unsatisfiable_client(self._dimension) for _ in range(number_of_dummies)]
 
-    def step(self, client):
+    def _setup_step(self, client):
         self._pre_step_update_history(client)
         history_set: List['Client'] = self._get_history_set() + [client]
         for s in self._machines:
             s.flush(client)
+        return history_set
+
+    def step(self, client):
+        history_set: List['Client'] = self._setup_step(client)
         prob = LpProblem("MultipleKnapsackWithDepartures", LpMaximize)
 
         x = LpVariable.dicts("x", ((c, s) for c in history_set for s in self._machines), lowBound=0, upBound=1)
@@ -74,13 +75,11 @@ class VGAPWD:
         probs = [(s, x[(client, s)].varValue) for s in self._machines]
         total = sum(p for _, p in probs) if probs else 0
         if total == 0:
-            # print(f"Customer {client} is unassigned")
             assigned_machine = None
         else:
             normalized = [(s, p / total) for s, p in probs]
             slots, weights = zip(*normalized)
             assigned_machine = random.choices(slots, weights=weights)[0]
-            # print(f"Customer {client} assigned to {assigned_machine} by randomized rounding")
 
         if assigned_machine and assigned_machine.check_feasible(client):
             self._value += client.value
@@ -92,7 +91,6 @@ class VGAPWD:
         self._clients.sort(key=lambda c:c.assign_time)
         for i, c in enumerate(self._clients):
             self.step(c)
-            # print(f"Finished round {i}")
         return self._value
 
 
@@ -122,15 +120,12 @@ class VMKPSD(VGAPWD):
         prob.solve(PULP_CBC_CMD(msg=0))
         probability = x[(client)].varValue
         if probability < random.random():
-            # print(f"Customer {client} is unassigned")
             return
         for s in self._machines:
             if s.check_feasible(client):
                 s.assign(client)
                 self._value += client.value
-                # print(f"Customer {client} assigned to {s} by randomized rounding")
                 return
-        # print(f"Customer {client} is unassigned due to no free machines")
 
 
 class VMKPSDWH:
@@ -184,3 +179,43 @@ class VMKPSDWH:
 
         inst = VMKPSD(self._history_set, self._machines, self._clients, best_alpha)
         return inst.calc_value()
+
+
+class GreedyVGAPWD(VGAPWD):
+    def _check_curr_round(self, client):
+        history_set: List['Client'] = self._setup_step(client)
+        curr_machines: List['Machine'] = copy.deepcopy(self._machines)
+        for m in curr_machines:
+            m.clear()
+        history_set.sort(key=self._sort_func,reverse=True)
+        client_assigned = False
+        for c in history_set:
+            current_assigned = False
+            for machine in self.curr_machines:
+                if machine.check_feasible(c):
+                    if c is client:
+                        client_assigned = True
+                        break
+                    machine.assign(c)
+                    current_assigned = True
+                    continue
+            if not current_assigned or client_assigned:
+                return client_assigned
+        return False
+
+    def step(self, client):
+        if self._check_curr_round(client):
+            for s in self._machines:
+                if s.check_feasible(client):
+                    s.assign(client)
+                    self._value += client.value
+                    return
+                
+    def _sort_func(self, client: 'Client'):
+        return client.value / sum(client.demands)
+
+
+# Use the bussiest dimention as a threshold
+class SingleDimentionGreedyVGAPWD(GreedyVGAPWD):
+        def _sort_func(self, client: 'Client'):
+            return client.value / client.demands[0]
