@@ -6,12 +6,11 @@ from members import Machine, Client
 from consts import *
 from parse_raw_data import TimeWindow
 
-SLOTS = 2000
+SLOTS = 15000
 class VGAPWD:
-    def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], num_intervals, alpha = 0.5, time_interval=GOOGLE_CLUSTERS_TIME_INTERVAL):
+    def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], alpha = 0.5):
         self._slot_count = SLOTS
         self._clients: List['Client'] = copy.deepcopy(clients)
-        self._current_clients_in_interval = []
         self._history_set = copy.deepcopy(history_set)
         self._dimension = len(clients[0].demands)
         self._num_intervals = clients.length
@@ -25,19 +24,24 @@ class VGAPWD:
         self._pre_process_data()
 
     def _pre_process_data(self):
-        self._history_set += [Client.unsatisfiable_client(self._dimension) for _ in range(self._slot_count * self._num_intervals - len(self._history_set))]
+        #self._history_set += [Client.unsatisfiable_client(self._dimension) for _ in range(self._slot_count * self._num_intervals - len(self._history_set))]
+        self._number_of_dummies = self._slot_count * self._history_set.length - len(self._history_set)
 
     def _get_history_set(self):
         # print(f"History set size is {len(self._history_set)}")
-        chosen_history: List['Client'] = random.sample(self._history_set, self._num_intervals * self._slot_count)
-        return [h for h in chosen_history if h.is_satisfible]
+
+        number_of_real = len(self._history_set)
+        total = number_of_real + self._number_of_dummies
+        sampled_indices = random.sample(range(total), self._num_intervals * self._slot_count)
+
+        return [self._history_set[i] for i in sampled_indices if i < number_of_real]
 
     def _pre_step_update_history(self, client: 'Client'):
         if client.assign_time > self._current_assign_time:
             # print("Creating new set of dummies")
             self._current_assign_time = client.assign_time
-            self._current_clients_in_interval = [c for c in self._clients if c.assign_time == self._current_assign_time]
-            self._random_sample_for_current_interval = random.sample(range(SLOTS), len(self._current_clients_in_interval))
+            number_of_clients_in_interval = sum(1 for c in self._clients if c.assign_time == self._current_assign_time)
+            self._random_sample_for_current_interval = random.sample(range(SLOTS), number_of_clients_in_interval)
             self._random_sample_for_current_interval.sort()
             self._current_index = 0
             self._current_random_index = 0
@@ -47,7 +51,8 @@ class VGAPWD:
         self._current_index += 1
         number_of_dummies = self._current_random_index - prev_random_index
         # print(f"Number of dummies is {number_of_dummies}")
-        self._history_set += [Client.unsatisfiable_client(self._dimension) for _ in range(number_of_dummies)]
+        self._number_of_dummies += number_of_dummies
+        #self._history_set += [Client.unsatisfiable_client(self._dimension) for _ in range(number_of_dummies)]
 
     def step(self, client):
         self._pre_step_update_history(client)

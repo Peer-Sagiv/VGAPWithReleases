@@ -13,17 +13,14 @@ class Client:
         self.demands = demands
         self.value = value
 
-    def value_density(self):
-        return self.value / (sum(self.demands) * self.departure_time - self.assign_time)
-    
     @property
     def is_satisfible(self):
         return self.value != UNSATISFIABLE_VALUE
-    
+
     @classmethod
     def from_json_entry(cls, entry):
         return cls(entry["start_time"], entry["end_time"], [entry["cpus"], entry["memory"]], entry["value"])
-    
+
     @classmethod
     def from_csv_entry(cls, entry, random_demands=False):
         if random_demands:
@@ -156,7 +153,7 @@ class TimeWindow(Sequence):
 
         start = current_query_time
         end = start + history_interval_time
-        return TimeWindow([client for client in self._clients_list if start <= client.assign_time < end], start, end)
+        return TimeWindow([client for client in self._clients_list if start <= client.assign_time < end], start, end, unit_size=self.unit_size)
 
     def iter_windows(self, k):
         """
@@ -205,8 +202,8 @@ class TimeWindow(Sequence):
         first_end = first_start + history_interval_time
         second_start = first_end
         second_end = first_end + history_interval_time
-        window1 = TimeWindow([client for client in self._clients_list if first_start <= client.assign_time < first_end], first_start, first_end)
-        window2 = TimeWindow([client for client in self._clients_list if second_start <= client.assign_time < second_end], second_start, second_end)
+        window1 = TimeWindow([client for client in self._clients_list if first_start <= client.assign_time < first_end], first_start, first_end, unit_size=self.unit_size)
+        window2 = TimeWindow([client for client in self._clients_list if second_start <= client.assign_time < second_end], second_start, second_end, unit_size=self.unit_size)
 
         return window1, window2
 
@@ -230,56 +227,74 @@ class TimeWindow(Sequence):
             window1 = TimeWindow(
                 [client for client in self._clients_list if first_start <= client.assign_time < first_end],
                 first_start,
-                first_end
+                first_end,
+                unit_size=self.unit_size
             )
             window2 = TimeWindow(
                 [client for client in self._clients_list if second_start <= client.assign_time < second_end],
                 second_start,
-                second_end
+                second_end,
+                unit_size=self.unit_size
             )
             yield window1, window2
             t += real_step
 
 
-    def compute_load(self):
+    def get_max_total_demand(self):
         """
-        Compute the peak resource load over the time window based on clients.
-
+        Compute the maximum total demand over time in each resource dimension.
         Returns:
-            A tuple of floats representing the maximum load per resource dimension observed.
-            The length of the tuple corresponds to the number of resource dimensions.
+            A tuple of floats representing the peak concurrent demand per resource dimension observed.
         """
+        if not self._clients_list:
+            return tuple()
+
         events = []
         for client in self._clients_list:
-            # Using assign_time as start, departure_time as end
             events.append((client.assign_time, 'start', client))
             events.append((client.departure_time, 'end', client))
 
-        # Sort events by time; for same time, 'end' events before 'start'
+        # Sort events; for same time, 'end' events before 'start' events
         events.sort(key=lambda x: (x[0], 0 if x[1] == 'end' else 1))
 
-        if not self._clients_list:
-            return tuple()  # No clients, so no load
-
-        # Number of resource dimensions (assumes all clients have the same length demands)
         num_dims = len(self._clients_list[0].demands)
-
-        current_load = [0.0] * num_dims
-        max_load = [0.0] * num_dims
+        current_demand = [0.0] * num_dims
+        max_demand = [0.0] * num_dims
 
         for _, event_type, client in events:
             demands = client.demands
-
             if event_type == 'end':
                 for i in range(num_dims):
-                    current_load[i] -= demands[i]
-            else:
+                    current_demand[i] -= demands[i]
+            else:  # 'start'
                 for i in range(num_dims):
-                    current_load[i] += demands[i]
-
+                    current_demand[i] += demands[i]
             for i in range(num_dims):
-                if current_load[i] > max_load[i]:
-                    max_load[i] = current_load[i]
+                if current_demand[i] > max_demand[i]:
+                    max_demand[i] = current_demand[i]
 
-        return tuple(max_load)
+        return tuple(max_demand)
 
+    def get_sum_total_demand(self):
+        """
+        Compute the sum of total demand (demand * duration) over all clients in each resource dimension.
+        Returns:
+            A tuple of floats representing the total resource consumption per dimension.
+        """
+        if not self._clients_list:
+            return tuple()
+
+        num_dims = len(self._clients_list[0].demands)
+        sum_demand = [0.0] * num_dims
+
+        for client in self._clients_list:
+            duration = (client.departure_time - client.assign_time) // self.unit_size
+            if duration <= 0:
+                continue
+            for i in range(num_dims):
+                sum_demand[i] += client.demands[i] * duration
+
+        return tuple(sum_demand)
+
+    def get_avg_demand(self):
+        return [demand / (2 * self.length) for demand in self.get_sum_total_demand()]

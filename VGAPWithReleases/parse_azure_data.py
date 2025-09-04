@@ -10,12 +10,15 @@ import numpy as np
 
 AZURE_TIME_INTERVAL_DAYS = 14
 AZURE_TIME_PARALLEL_DAYS = 7
-AZURE_TIME_INTERVAL = 0.0004 # 0.0024 hours = 8.64 seconds
+AZURE_TIME_INTERVAL = 0.00001 # 0.0024 hours = 8.64 seconds
 DB_NAME = "packing_trace_zone_a_v1.sqlite"
 
 
 def get_assignments_starting_between(db_path, t, l):
     # Compute window end
+    #print(t)
+    #print(l)
+    #print(t + l)
     t_end = t + l
 
     conn = sqlite3.connect(db_path)
@@ -44,14 +47,15 @@ def get_assignments_starting_between(db_path, t, l):
         AND vt.ssd <= 0.5
         AND vt.nic <= 0.5
         AND vt.core <= 0.5
+        AND v.endtime > v.starttime + ?
     ORDER BY
         v.starttime ASC
     """
 
-    print("executing")
-    df = pd.read_sql_query(query, conn, params=(t, t_end))
+    #print("executing")
+    df = pd.read_sql_query(query, conn, params=(t, t_end, AZURE_TIME_INTERVAL))
 
-    print("after executing")
+    #print("after executing")
     conn.close()
 
     return df
@@ -79,31 +83,54 @@ def give_value_by_theta(inst, theta, pareto_alpha):
 
 
 def process_azure_data(theta, required_time, history_time, pareto_alpha, parallel_time=False):
-    if parallel_time and history_time != required_time:
-        raise ValueError("Parallel can't run with history time different than required time")
+    #if parallel_time and history_time != required_time:
+    #    raise ValueError("Parallel can't run with history time different than required time")
     original_required_time = required_time
+    original_history_time = history_time
+
+    history_time *= AZURE_TIME_INTERVAL
     required_time *= AZURE_TIME_INTERVAL
     if parallel_time:
         base_time = AZURE_TIME_PARALLEL_DAYS / AZURE_TIME_INTERVAL
     else:
         base_time = AZURE_TIME_INTERVAL_DAYS / AZURE_TIME_INTERVAL
-    max_query_interval = base_time - 2 * required_time - history_time
-    current_query_time = random.uniform(1, max_query_interval) * AZURE_TIME_INTERVAL
 
-    history_start = current_query_time
-    history_end = history_start + required_time
-    first_interval_values = get_assignments_starting_between(DB_NAME, current_query_time, history_time).to_dict(orient='records')
+    arbitrary_start_azure_time = 1.5
+    three_hours_azure_time = 3 / 24.0
+
+    arbitrary_start_in_intervals = arbitrary_start_azure_time / AZURE_TIME_INTERVAL
+    three_hours_in_intervals = three_hours_azure_time / AZURE_TIME_INTERVAL
+
+    end_time_in_intervals = arbitrary_start_in_intervals + three_hours_in_intervals
+
+    max_query_interval = end_time_in_intervals - 2 * original_required_time - original_history_time
+    current_query_time = random.uniform(arbitrary_start_in_intervals, max_query_interval) * AZURE_TIME_INTERVAL
+
+    #max_query_interval = base_time - 2 * original_required_time - original_history_time
+
+    #current_query_time = random.uniform(original_history_time, max_query_interval) * AZURE_TIME_INTERVAL
+
+
 
     if parallel_time:
         online_start = current_query_time + AZURE_TIME_PARALLEL_DAYS
         online_end = online_start + required_time
-        second_interval_values = get_assignments_starting_between(DB_NAME, current_query_time + AZURE_TIME_PARALLEL_DAYS, required_time).to_dict(orient='records')
+
+        history_end = current_query_time + required_time
+        history_start = history_end - history_time
     else:
-        online_start = current_query_time + required_time
+        history_start = current_query_time
+        history_end = history_start + history_time
+
+        online_start = history_end
         online_end = online_start + required_time
-        second_interval_values = get_assignments_starting_between(DB_NAME, current_query_time + required_time, required_time).to_dict(orient='records')
+
+    first_interval_values = get_assignments_starting_between(DB_NAME, history_start, history_time).to_dict(orient='records')
+    second_interval_values = get_assignments_starting_between(DB_NAME, online_start, required_time).to_dict(orient='records')
 
     if len(first_interval_values) < MIN_SAMPLE_SIZE or len(second_interval_values) < MIN_SAMPLE_SIZE:
+        print(len(first_interval_values))
+        print(len(second_interval_values))
         return None, None
 
     history = post_process_entry(first_interval_values, original_required_time, theta, pareto_alpha)

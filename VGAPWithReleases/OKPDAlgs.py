@@ -8,19 +8,19 @@ if TYPE_CHECKING:
 
 
 class OKPDAlgBase:
-    def __init__(self, machines:List['Machine'], clients: List['Client'], time_slot_interval):
+    def __init__(self, machines:List['Machine'], clients):
         self._machines = machines
         self._value = 0
-        self._clients: List['Client'] = clients
-        self._time_slot_interval = time_slot_interval
+        self._clients = clients
+        self._time_slot_interval = clients.unit_size
         self._min_assign_time, self._max_departure_time = self._get_time_slots_edges()
         self._alpha = self._calc_alpha()
         self._theta = self._calc_theta()
         self._utilization = {m : [[0 for _ in range(self._min_assign_time, self._max_departure_time, self._time_slot_interval)] for _ in range(m.dimensions())] for m in self._machines}
-    
+
     def _threshold_function(self, z, capacity, slot_duration):
         raise NotImplemented()
-    
+
     def _get_time_slots_edges(self):
         max_departure_time = max([c.departure_time for c in self._clients])
         min_assign_time = min([c.assign_time for c in self._clients])
@@ -49,7 +49,7 @@ class OKPDAlgBase:
     def _get_client_timeslots(self, client: 'Client'):
         return range((client.assign_time - self._min_assign_time) // self._time_slot_interval,
                      (client.departure_time - self._min_assign_time) // self._time_slot_interval)
-    
+
     def _get_client_slots_duration(self, client: 'Client'):
         return client.departure_time / self._time_slot_interval - client.assign_time / self._time_slot_interval
 
@@ -62,7 +62,7 @@ class OKPDAlgBase:
             for d in range(machine.dimensions()):
                 utilization += self._threshold_function(machine_utilization[d][timeslot], machine.capacity(d), self._get_client_slots_duration(client)) * client.demands[d]
         return utilization
-    
+
     def _update_utilization(self, machine: 'Machine', client: 'Client'):
         utilization = self._utilization[machine]
         for d in range(machine.dimensions()):
@@ -101,29 +101,29 @@ class Design1Alg(OKPDAlgBase):
         if z < capacity / (1 + np.log(self._theta)):
             return 1
         return np.exp(((1 + np.log(self._theta) * z ) / capacity) - 1)
-    
+
 class Design2Alg(OKPDAlgBase):
     def _threshold_function(self, z, capacity, slot_duration):
         return 2 ** math.floor((z * np.log10(self._theta * slot_duration) / capacity)) - 1
-    
+
 class WCOAlg(OKPDAlgBase):
     def _threshold_function(self, z, capacity, slot_duration):
         return np.exp(z * np.log(self._alpha * self._theta + 1))
 
 class TailoredOKPDA(OKPDAlgBase):
-    def __init__(self, machines, clients, time_slot_interval, w):
-        super().__init__(machines, clients, time_slot_interval)
+    def __init__(self, machines, clients, w):
+        super().__init__(machines, clients)
         self._w = w
 
     def _threshold_function(self, z, capacity, slot_duration):
         return np.exp((self._w * z) / capacity) - 1
 
 class DataDrivenAlg(OKPDAlgBase):
-    def __init__(self, machines:List['Machine'], clients: List['Client'], history: List['Client'], time_slot_interval):
-        super().__init__(machines, clients, time_slot_interval)
+    def __init__(self, machines:List['Machine'], clients: List['Client'], history: List['Client']):
+        super().__init__(machines, clients)
         self._w_list = self.calc_w_list()
         self._history = history
-        self._time_slot_interval = time_slot_interval
+        self._time_slot_interval = clients.unit_size
 
     def calc_w_list(self):
         ln2 = np.log(2)
@@ -140,19 +140,19 @@ class DataDrivenAlg(OKPDAlgBase):
     def calc_value(self):
         best_value, best_w = -1, None
         for w in self._w_list:
-            curr_alg = TailoredOKPDA(self._machines, self._history, self._time_slot_interval, w)
+            curr_alg = TailoredOKPDA(self._machines, self._history, w)
             curr_res = curr_alg.calc_value()
             if curr_res > best_value:
                 best_value = curr_res
                 best_w = w
-        best_alg = TailoredOKPDA(self._machines, self._clients, self._time_slot_interval, best_w)
+        best_alg = TailoredOKPDA(self._machines, self._clients, best_w)
         return best_alg.calc_value()
-    
+
 class GammaOfflineAlg(DataDrivenAlg):
     def calc_value(self):
         best_value = -1
         for w in self._w_list:
-            curr_alg = TailoredOKPDA(self._machines, self._clients, self._time_slot_interval, w)
+            curr_alg = TailoredOKPDA(self._machines, self._clients, w)
             curr_res = curr_alg.calc_value()
             if curr_res > best_value:
                 best_value = curr_res

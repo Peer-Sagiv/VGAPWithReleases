@@ -6,11 +6,11 @@ if TYPE_CHECKING:
     from members import Client, Machine
 
 class OPTAlg:
-    def __init__(self, machines: List['Machine'], clients: List['Client'], time_interval):
+    def __init__(self, machines: List['Machine'], clients):
         self._machines = machines
         self._clients:List['Client'] = clients
         self._dimension = len(clients[0].demands)
-        self._time_interval = time_interval
+        self._time_interval = clients.unit_size
 
     def calc_value(self):
         T = sorted(set(t for c in self._clients for t in range(c.assign_time, c.departure_time, self._time_interval)))
@@ -31,7 +31,7 @@ class OPTAlg:
             for d in range(self._dimension):
                 for t in T:
                     prob += lpSum(c.demands[d] * x[(c, s)]  for c in active_clients_per_time[t]) <= s.capacity(d), f"Cap_{s}_{d}_t{t}"
-        
+
         total_value = 0
         prob.solve(PULP_CBC_CMD(msg=0))
         for client in self._clients:

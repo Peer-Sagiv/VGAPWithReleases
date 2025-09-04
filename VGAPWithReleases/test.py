@@ -85,9 +85,9 @@ def run_all(large_history, clients, machines, run_simple_alg=False, log_results=
     values = {}
     # print("Calculating our algs")
     if run_simple_alg:
-        values[VGAPWD_NAME] = handle_cls_context(VGAPWD, VGAPWD_NAME, history, machines, clients, log_results=log_results)
+        values[VGAPWD_NAME] = handle_cls_context(VGAPWD, VGAPWD_NAME, history, machines, clients, 0.5, log_results=log_results)
     values[VMKPSD_NAME] = handle_cls_context(VMKPSD, VMKPSD_NAME, history, machines, clients, 0.5, log_results=log_results)
-    values[VMKPSDWH_NAME] = handle_cls_context(VMKPSDWH, VMKPSDWH_NAME, large_history, history, machines, clients, log_results=log_results)
+    #values[VMKPSDWH_NAME] = handle_cls_context(VMKPSDWH, VMKPSDWH_NAME, large_history, history, machines, clients, log_results=log_results)
 
 
     # print("calculating simple")
@@ -97,15 +97,15 @@ def run_all(large_history, clients, machines, run_simple_alg=False, log_results=
     values[RANDOM_ORDER_NAME] = handle_cls_context(RandomOrderAlg, RANDOM_ORDER_NAME, machines, clients, log_results=log_results)
 
     # print("calculating OKPD")
-    values[WCO_NAME] = handle_cls_context(WCOAlg, WCO_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
-    values[GREEDY_NAME] = handle_cls_context(GreedyAlg, GREEDY_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
-    values[DESIGN_1_NAME] = handle_cls_context(Design1Alg, DESIGN_1_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
-    values[DESIGN_2_NAME] = handle_cls_context(Design2Alg, DESIGN_2_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
-    values[DATA_DRIVEN_NAME] = handle_cls_context(DataDrivenAlg, DATA_DRIVEN_NAME, machines, clients, history, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
-    values[GAMMA_OFFLINE_NAME] = handle_cls_context(GammaOfflineAlg, GAMMA_OFFLINE_NAME, machines, clients, history, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
+    values[WCO_NAME] = handle_cls_context(WCOAlg, WCO_NAME, machines, clients, log_results=log_results)
+    values[GREEDY_NAME] = handle_cls_context(GreedyAlg, GREEDY_NAME, machines, clients, log_results=log_results)
+    values[DESIGN_1_NAME] = handle_cls_context(Design1Alg, DESIGN_1_NAME, machines, clients, log_results=log_results)
+    values[DESIGN_2_NAME] = handle_cls_context(Design2Alg, DESIGN_2_NAME, machines, clients, log_results=log_results)
+    values[DATA_DRIVEN_NAME] = handle_cls_context(DataDrivenAlg, DATA_DRIVEN_NAME, machines, clients, history, log_results=log_results)
+    values[GAMMA_OFFLINE_NAME] = handle_cls_context(GammaOfflineAlg, GAMMA_OFFLINE_NAME, machines, clients, history, log_results=log_results)
 
     # print("calculating opt")
-    values[OPT_NAME] = handle_cls_context(OPTAlg, OPT_NAME, machines, clients, GOOGLE_CLUSTERS_TIME_INTERVAL, log_results=log_results)
+    values[OPT_NAME] = handle_cls_context(OPTAlg, OPT_NAME, machines, clients, log_results=log_results)
 
     if log_results:
         print_all_results(values)
@@ -305,13 +305,28 @@ def main():
     num_machines = args.num_machines
     if args.load is not None:
         # Compute peak load from clients in the history window
-        max_load = max(clients.compute_load())
+
+        print("max_demands=", clients.get_max_total_demand())
+        print("avg_demands=", clients.get_avg_demand())
+        max_demand = max(clients.get_max_total_demand())
+        avg_demand = max(clients.get_avg_demand())
+        print("max_demand=", max_demand)
+        print("avg_demand=", avg_demand)
 
         # Compute required machines to get requested load
-        # requested load means we want to provision "load" fraction of max_load per machine
-        required_machines = math.floor(max_load / (args.machine_size * args.load))
+        required_machines_max_demand = math.floor(max_demand / (args.machine_size * args.load))
+        required_machines_avg_demand = math.floor(avg_demand / (args.machine_size * args.load))
+
+
+        print("required_machines_max_demand=", required_machines_max_demand)
+        print("required_machines_avg_demand=", required_machines_avg_demand)
+
+
+        required_machines = required_machines_avg_demand
+
         if required_machines < 1:
             required_machines = 1  # At least one machine needed
+
         num_machines = required_machines
 
         print(f"Computed number of machines needed for load {args.load}: {num_machines}")
