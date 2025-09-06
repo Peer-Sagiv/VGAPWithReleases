@@ -5,7 +5,7 @@ import shutil
 import csv
 from collections import defaultdict
 from pathlib import Path
-from newAlgs import VGAPWD, VMKPSD, VMKPSDWH, GreedyVGAPWD, SingleDimentionGreedyVGAPWD
+from newAlgs import VGAPWD, VMKPSD, VMKPSDWH, GreedyVGAPWD, GreedyVMKPSD
 from members import Machine
 from OKPDAlgs import WCOAlg, GreedyAlg, Design1Alg, Design2Alg, DataDrivenAlg, GammaOfflineAlg
 from simpleAlgs import FirstFitAlg, BestFitAlg, RandomOrderAlg, WorstFitAlg
@@ -90,7 +90,7 @@ def run_all(large_history, clients, machines, run_simple_alg=False, log_results=
     # values[VMKPSDWH_NAME] = handle_cls_context(VMKPSDWH, VMKPSDWH_NAME, large_history, history, machines, clients, log_results=log_results)
 
     values[GREEDY_VGAPWD_NAME] = handle_cls_context(GreedyVGAPWD, GREEDY_VGAPWD_NAME, history, machines, clients, log_results=log_results)
-    values[SINGLE_DIMENTTION_GREEDY_VGAPWD] = handle_cls_context(SingleDimentionGreedyVGAPWD, SINGLE_DIMENTTION_GREEDY_VGAPWD, history, machines, clients, log_results=log_results)
+    values[GREEDY_VMKPSD_NAME] = handle_cls_context(GreedyVMKPSD, GREEDY_VMKPSD_NAME, history, machines, clients, log_results=log_results)
 
     # print("calculating simple")
     values[BEST_FIT_NAME] = handle_cls_context(BestFitAlg, BEST_FIT_NAME, machines, clients, log_results=log_results)

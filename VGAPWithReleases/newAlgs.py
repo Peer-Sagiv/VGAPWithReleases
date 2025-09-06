@@ -23,6 +23,14 @@ class VGAPWD:
         self._current_random_index = 0
         self._pre_process_data()
 
+    def _find_bottelneck_dimension(self, clients: List['Client']):
+        total = [0.0] * len(clients[0].demands)
+        for client in clients:
+            for i, d in enumerate(client.demands):
+                total[i] += d
+
+        return max(range(len(total)), key=lambda i: total[i])
+
     def _pre_process_data(self):
         #self._history_set += [Client.unsatisfiable_client(self._dimension) for _ in range(self._slot_count * self._num_intervals - len(self._history_set))]
         self._number_of_dummies = self._slot_count * self._history_set.length - len(self._history_set)
@@ -96,11 +104,7 @@ class VGAPWD:
 
 class VMKPSD(VGAPWD):
     def step(self, client):
-        self._pre_step_update_history(client)
-        history_set: List['Client'] = self._get_history_set() + [client]
-        for s in self._machines:
-            s.flush(client)
-
+        history_set: List['Client'] = self._setup_step(client)
         available = 0
         for s in self._machines:
             if s.check_feasible(client):
@@ -182,40 +186,68 @@ class VMKPSDWH:
 
 
 class GreedyVGAPWD(VGAPWD):
-    def _check_curr_round(self, client):
-        history_set: List['Client'] = self._setup_step(client)
-        curr_machines: List['Machine'] = copy.deepcopy(self._machines)
-        for m in curr_machines:
-            m.clear()
-        history_set.sort(key=self._sort_func,reverse=True)
-        client_assigned = False
-        for c in history_set:
-            current_assigned = False
-            for machine in self.curr_machines:
-                if machine.check_feasible(c):
-                    if c is client:
-                        client_assigned = True
-                        break
-                    machine.assign(c)
-                    current_assigned = True
-                    continue
-            if not current_assigned or client_assigned:
-                return client_assigned
-        return False
-
     def step(self, client):
-        if self._check_curr_round(client):
-            for s in self._machines:
-                if s.check_feasible(client):
-                    s.assign(client)
-                    self._value += client.value
-                    return
-                
-    def _sort_func(self, client: 'Client'):
-        return client.value / sum(client.demands)
+        history_set: List['Client'] = self._setup_step(client)
+        prob = LpProblem("MultipleKnapsackWithDeparturesGreedyVGAP", LpMaximize)
 
+        x = LpVariable.dicts("x", ((c, s) for c in history_set for s in self._machines), lowBound=0, upBound=1)
+        prob += lpSum(c.value * x[(c, s)] for c in history_set for s in self._machines)
 
-# Use the bussiest dimention as a threshold
-class SingleDimentionGreedyVGAPWD(GreedyVGAPWD):
-        def _sort_func(self, client: 'Client'):
-            return client.value / client.demands[0]
+        for c in history_set:
+            prob += lpSum(x[(c, s)] for s in self._machines) <= 1
+        
+        releveant_dim = self._find_bottelneck_dimension(history_set)
+        for s in self._machines:
+            prob += lpSum(c.demands[releveant_dim] * (c.departure_time - c.assign_time) * x[(c, s)] for c in history_set) <= self._max_time * s.capacity(releveant_dim) * self._alpha
+
+        prob.solve(PULP_CBC_CMD(msg=0))
+        probs = [(s, x[(client, s)].varValue) for s in self._machines]
+        total = sum(p for _, p in probs) if probs else 0
+        if total == 0:
+            assigned_machine = None
+        else:
+            normalized = [(s, p / total) for s, p in probs]
+            slots, weights = zip(*normalized)
+            assigned_machine = random.choices(slots, weights=weights)[0]
+
+        if assigned_machine and assigned_machine.check_feasible(client):
+            self._value += client.value
+            assigned_machine.assign(client)
+
+class GreedyVMKPSD(VGAPWD):
+    def _find_bottelneck_dimension(self, clients: List['Client']):
+        total = [0.0] * len(clients[0].demands)
+        for client in clients:
+            for i, d in enumerate(client.demands):
+                total[i] += d
+
+        return max(range(len(total)), key=lambda i: total[i])
+    
+    def step(self, client):
+        history_set: List['Client'] = self._setup_step(client)
+        available = 0
+        for s in self._machines:
+            if s.check_feasible(client):
+                available = 1
+
+        if not available:
+            return
+
+        prob = LpProblem("VectorMultipleKnapsackWithDeparturesGreedyOneDim", LpMaximize)
+
+        x = LpVariable.dicts("y", ((c) for c in history_set), lowBound=0, upBound=1)
+        prob += lpSum(c.value * x[(c)] for c in history_set)
+
+        releveant_dim = self._find_bottelneck_dimension(history_set)
+
+        prob += lpSum(c.demands[releveant_dim] * (c.departure_time - c.assign_time) * x[(c)] for c in history_set) <= self._max_time * sum(s.capacity(releveant_dim) for s in self._machines) * self._alpha
+
+        prob.solve(PULP_CBC_CMD(msg=0))
+        probability = x[(client)].varValue
+        if probability < random.random():
+            return
+        for s in self._machines:
+            if s.check_feasible(client):
+                s.assign(client)
+                self._value += client.value
+                return
