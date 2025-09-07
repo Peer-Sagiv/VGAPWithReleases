@@ -190,15 +190,17 @@ class GreedyVGAPWD(VGAPWD):
         history_set: List['Client'] = self._setup_step(client)
         prob = LpProblem("MultipleKnapsackWithDeparturesGreedyVGAP", LpMaximize)
 
-        x = LpVariable.dicts("x", ((c, s) for c in history_set for s in self._machines), lowBound=0, upBound=1)
-        prob += lpSum(c.value * x[(c, s)] for c in history_set for s in self._machines)
+        # We assume the capacity of each machine at each dimension is 1. Otherwise the model becomes undefined.
+        working_machines = [Machine([1]) for _ in len(self._machines)]
+        x = LpVariable.dicts("x", ((c, s) for c in history_set for s in working_machines), lowBound=0, upBound=1)
+        prob += lpSum(c.value * x[(c, s)] for c in history_set for s in working_machines)
 
         for c in history_set:
             prob += lpSum(x[(c, s)] for s in self._machines) <= 1
         
-        releveant_dim = self._find_bottelneck_dimension(history_set)
+        releveant_dim = 0
         for s in self._machines:
-            prob += lpSum(c.demands[releveant_dim] * (c.departure_time - c.assign_time) * x[(c, s)] for c in history_set) <= self._max_time * s.capacity(releveant_dim) * self._alpha
+            prob += lpSum(max(c.demands) * (c.departure_time - c.assign_time) * x[(c, s)] for c in history_set) <= self._max_time * s.capacity(releveant_dim) * self._alpha
 
         prob.solve(PULP_CBC_CMD(msg=0))
         probs = [(s, x[(client, s)].varValue) for s in self._machines]
@@ -215,35 +217,25 @@ class GreedyVGAPWD(VGAPWD):
             assigned_machine.assign(client)
 
 class GreedyVMKPSD(VGAPWD):
-    def _find_bottelneck_dimension(self, clients: List['Client']):
-        total = [0.0] * len(clients[0].demands)
-        for client in clients:
-            for i, d in enumerate(client.demands):
-                total[i] += d
-
-        return max(range(len(total)), key=lambda i: total[i])
-    
-    def step(self, client):
+    def _check_curr_round(self, client):
         history_set: List['Client'] = self._setup_step(client)
-        available = 0
-        for s in self._machines:
-            if s.check_feasible(client):
-                available = 1
+        free_capacity = 1.0 * len(self._machines)
+        history_set.sort(key=self._sort_func,reverse=True)
+        for c in history_set:
+            if free_capacity > 0:
+                if free_capacity >= max(c.demands):
+                    if c is client:
+                        return 1.0
+                    free_capacity -= max(c.demands)
+                    continue
+                if c is client:
+                    return self._partial_capacity_prob(c, free_capacity)
+            else:
+                return 0.0
+        return 0.0
 
-        if not available:
-            return
-
-        prob = LpProblem("VectorMultipleKnapsackWithDeparturesGreedyOneDim", LpMaximize)
-
-        x = LpVariable.dicts("y", ((c) for c in history_set), lowBound=0, upBound=1)
-        prob += lpSum(c.value * x[(c)] for c in history_set)
-
-        releveant_dim = self._find_bottelneck_dimension(history_set)
-
-        prob += lpSum(c.demands[releveant_dim] * (c.departure_time - c.assign_time) * x[(c)] for c in history_set) <= self._max_time * sum(s.capacity(releveant_dim) for s in self._machines) * self._alpha
-
-        prob.solve(PULP_CBC_CMD(msg=0))
-        probability = x[(client)].varValue
+    def step(self, client):
+        probability = self._check_curr_round(client)
         if probability < random.random():
             return
         for s in self._machines:
@@ -251,3 +243,14 @@ class GreedyVMKPSD(VGAPWD):
                 s.assign(client)
                 self._value += client.value
                 return
+        
+    def _sort_func(self, client: 'Client'):
+        return client.value / max(client.demands)
+    
+    def _partial_capacity_prob(self, client: 'Client', free_capacity):
+        return free_capacity / max(client.demands) 
+
+
+class GreedyVMKPSDNoInfo(VGAPWD):
+    def _partial_capacity_prob(self, client: 'Client', free_capacity):
+        return 1.0

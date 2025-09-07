@@ -38,6 +38,10 @@ class Client:
     @classmethod
     def unsatisfiable_client(cls, dimensions):
         return cls(0, 1, [100 for _ in range(dimensions)], UNSATISFIABLE_VALUE)
+    
+    @classmethod
+    def single_dimention_client(cls, client:'Client'):
+        return cls(client.assign_time, client.departure_time, [max(client.demands)], client.value)
 
     def to_dict(self):
         return {
