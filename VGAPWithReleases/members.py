@@ -38,7 +38,7 @@ class Client:
     @classmethod
     def unsatisfiable_client(cls, dimensions):
         return cls(0, 1, [100 for _ in range(dimensions)], UNSATISFIABLE_VALUE)
-    
+
     @classmethod
     def single_dimention_client(cls, client:'Client'):
         return cls(client.assign_time, client.departure_time, [max(client.demands)], client.value)
@@ -50,6 +50,12 @@ class Client:
             "demands": self.demands,
             "value": self.value
         }
+
+    def one_dim_reduction_demand_over_time(self):
+        return max(self.demands) * (self.departure_time - self.assign_time)
+
+    def one_dim_reduction_rate(self):
+        return self.value / self.one_dim_reduction_demand_over_time()
 
 class Machine:
     def __init__(self, capacities):

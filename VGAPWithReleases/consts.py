@@ -6,7 +6,7 @@ COMBINED_A_RUNS = "cluster_a_12pm_40mins_merged_full2.csv"
 H_RUNS = "cluster_h_first10min.csv"
 THETA = 50
 
-MIN_SAMPLE_SIZE = 800
+MIN_SAMPLE_SIZE = 10
 SECOND = 1_000
 
 GOOGLE_CLUSTERS_TIME_INTERVAL = 1_000_000

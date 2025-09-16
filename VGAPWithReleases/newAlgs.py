@@ -43,9 +43,9 @@ class VGAPWD:
         sampled_indices = random.sample(range(total), self._num_intervals * self._slot_count)
 
         return [self._history_set[i] for i in sampled_indices if i < number_of_real]
-    
+
     def _post_step(self, client):
-        self._history_set.append(client)
+        self._history_set += [client]
 
     def _pre_step_update_history(self, client: 'Client'):
         if client.assign_time > self._current_assign_time:
@@ -95,7 +95,7 @@ class VGAPWD:
         if assigned_machine and assigned_machine.check_feasible(client):
             self._value += client.value
             assigned_machine.assign(client)
-        
+
         self._post_step(client)
 
     def calc_value(self):
@@ -197,15 +197,15 @@ class GreedyVGAPWD(VGAPWD):
         prob = LpProblem("MultipleKnapsackWithDeparturesGreedyVGAP", LpMaximize)
 
         # We assume the capacity of each machine at each dimension is 1. Otherwise the model becomes undefined.
-        working_machines = [Machine([self._alpha]) for _ in len(self._machines)]
+        working_machines = [Machine([m.capacity(0)]) for m in self._machines]
         x = LpVariable.dicts("x", ((c, s) for c in history_set for s in working_machines), lowBound=0, upBound=1)
         prob += lpSum(c.value * x[(c, s)] for c in history_set for s in working_machines)
 
         for c in history_set:
-            prob += lpSum(x[(c, s)] for s in self._machines) <= 1
-        
+            prob += lpSum(x[(c, s)] for s in working_machines) <= 1
+
         releveant_dim = 0
-        for s in self._machines:
+        for s in working_machines:
             prob += lpSum(max(c.demands) * (c.departure_time - c.assign_time) * x[(c, s)] for c in history_set) <= self._max_time * s.capacity(releveant_dim) * self._alpha
 
         prob.solve(PULP_CBC_CMD(msg=0))
@@ -228,14 +228,15 @@ class GreedyVGAPWD(VGAPWD):
 class GreedyVMKPSD(VGAPWD):
     def _check_curr_round(self, client):
         history_set: List['Client'] = self._setup_step(client)
-        free_capacity = self._alpha * len(self._machines)
+        releveant_dim = 0;
+        free_capacity = self._max_time * sum(s.capacity(releveant_dim) for s in self._machines) * self._alpha
         history_set.sort(key=self._sort_func,reverse=True)
         for c in history_set:
             if free_capacity > 0:
-                if free_capacity >= max(c.demands):
+                if free_capacity >= max(c.demands) * (c.departure_time - c.assign_time):
                     if c is client:
                         return 1.0
-                    free_capacity -= max(c.demands)
+                    free_capacity -= max(c.demands) * (c.departure_time - c.assign_time)
                     continue
                 if c is client:
                     return self._partial_capacity_prob(c, free_capacity)
@@ -253,17 +254,34 @@ class GreedyVMKPSD(VGAPWD):
                 s.assign(client)
                 self._value += client.value
                 return
-        
+
     def _sort_func(self, client: 'Client'):
-        return client.value / max(client.demands)
-    
+        return client.value / (max(client.demands) * (client.departure_time - client.assign_time))
+
     def _partial_capacity_prob(self, client: 'Client', free_capacity):
-        return free_capacity / max(client.demands) 
+        return free_capacity / (max(client.demands) * (client.departure_time - client.assign_time))
 
 
 class GreedyVMKPSDNoInfo(GreedyVMKPSD):
-    def _partial_capacity_prob(self, client: 'Client', free_capacity):
-        return 1.0
+    def _pre_process_data(self):
+        releveant_dim = 0
+        free_capacity = self._max_time * sum(s.capacity(releveant_dim) for s in self._machines) * self._alpha
+        self._history_set.sort(key=self._sort_func,reverse=True)
+        self._rate_threshold = 0
+        for c in self._history_set:
 
-    def _post_step(self, client):
-        pass
+            demand = c.one_dim_reduction_demand_over_time()
+            if free_capacity - demand > 0:
+                free_capacity -= demand
+            else:
+                self._rate_threshold = c.one_dim_reduction_rate()
+                return
+
+    def step(self, client):
+        if client.one_dim_reduction_rate() > self._rate_threshold:
+            for s in self._machines:
+                if s.check_feasible(client):
+                    s.assign(client)
+                    self._value += client.value
+                    return
+
