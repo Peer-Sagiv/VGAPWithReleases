@@ -8,7 +8,7 @@ from parse_raw_data import TimeWindow
 
 SLOTS = 15000
 class VGAPWD:
-    def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], alpha = 0.5):
+    def __init__(self, history_set, machines: List['Machine'], clients: List['Client'], alpha = None):
         self._slot_count = SLOTS
         self._clients: List['Client'] = copy.deepcopy(clients)
         self._history_set = copy.deepcopy(history_set)
@@ -17,7 +17,10 @@ class VGAPWD:
         self._machines = machines
         self._current_assign_time = min(client.assign_time for client in self._clients) - 1
         self._value = 0
-        self._alpha = alpha
+        if alpha:
+            self._alpha = alpha
+        else:
+            self._alpha = self.default_alpha
         self._max_time = 2 * self._num_intervals * clients.unit_size
         self._current_index = 0
         self._current_random_index = 0
@@ -30,6 +33,11 @@ class VGAPWD:
                 total[i] += d
 
         return max(range(len(total)), key=lambda i: total[i])
+
+    # Should be changed for each class after test data
+    @property
+    def default_alpha(self):
+        return 0.5
 
     def _pre_process_data(self):
         #self._history_set += [Client.unsatisfiable_client(self._dimension) for _ in range(self._slot_count * self._num_intervals - len(self._history_set))]
@@ -228,7 +236,7 @@ class GreedyVGAPWD(VGAPWD):
 class GreedyVMKPSD(VGAPWD):
     def _check_curr_round(self, client):
         history_set: List['Client'] = self._setup_step(client)
-        releveant_dim = 0;
+        releveant_dim = 0
         free_capacity = self._max_time * sum(s.capacity(releveant_dim) for s in self._machines) * self._alpha
         history_set.sort(key=self._sort_func,reverse=True)
         for c in history_set:

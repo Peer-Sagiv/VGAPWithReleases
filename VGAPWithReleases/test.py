@@ -77,7 +77,7 @@ def get_test_sample_from_source(theta, required_time, history_time, pareto_alpha
     return create_random_test_sample(theta, required_time, history_time, pareto_alpha)
 
 
-def run_all(large_history, clients, machines, run_simple_alg=False, log_results=False):
+def run_all(large_history, clients, machines, run_simple_alg=False, log_results=False, alpha=None):
 
 
     history, older_history = large_history.get_latest_from_window(clients.length)
@@ -90,10 +90,10 @@ def run_all(large_history, clients, machines, run_simple_alg=False, log_results=
     # values[VMKPSDWH_NAME] = handle_cls_context(VMKPSDWH, VMKPSDWH_NAME, large_history, history, machines, clients, log_results=log_results)
 
     if run_simple_alg:
-        values[GREEDY_VGAPWD_NAME] = handle_cls_context(GreedyVGAPWD, GREEDY_VGAPWD_NAME, history, machines, clients, log_results=log_results)
+        values[GREEDY_VGAPWD_NAME] = handle_cls_context(GreedyVGAPWD, GREEDY_VGAPWD_NAME, history, machines, clients, alpha, log_results=log_results)
 
-    values[GREEDY_VMKPSD_NAME] = handle_cls_context(GreedyVMKPSD, GREEDY_VMKPSD_NAME, history, machines, clients, 0.5, log_results=log_results)
-    values[GREEDY_VMKPSD_NO_INFO_NAME] = handle_cls_context(GreedyVMKPSDNoInfo, GREEDY_VMKPSD_NO_INFO_NAME, older_history, machines, clients, 1, log_results=log_results)
+    values[GREEDY_VMKPSD_NAME] = handle_cls_context(GreedyVMKPSD, GREEDY_VMKPSD_NAME, history, machines, clients, alpha, log_results=log_results)
+    values[GREEDY_VMKPSD_NO_INFO_NAME] = handle_cls_context(GreedyVMKPSDNoInfo, GREEDY_VMKPSD_NO_INFO_NAME, older_history, machines, clients, alpha, log_results=log_results)
 
     # print("calculating simple")
     values[BEST_FIT_NAME] = handle_cls_context(BestFitAlg, BEST_FIT_NAME, machines, clients, log_results=log_results)
@@ -189,7 +189,10 @@ def main():
                         help="Load azure data.")
     parser.add_argument("--parallel", type=bool, default=False,
                         help="Use parallel history (Azure only).")
-
+    
+    parser.add_argument("--learn-phase", type=bool, default=False,
+                        help="Create data for the learning phase, to lear the best alpha.")
+    
     args = parser.parse_args()
 
     results_dir = Path(args.name)
@@ -251,18 +254,35 @@ def main():
     # Create machines using final num_machines
     machines = [Machine([args.machine_size] * args.dimensions) for _ in range(num_machines)]
 
-    results = run_all(
-        large_history,
-        clients,
-        machines,
-        run_simple_alg=args.run_simple_alg,
-        log_results=args.log_results
-    )
+    if args.learn_phase:
+        for alpha in TRAIN_ALPHA_VALUES:
+            results = run_all(
+                large_history,
+                clients,
+                machines,
+                run_simple_alg=args.run_simple_alg,
+                alpha=alpha,
+                log_results=args.log_results
+            )
 
-    with open(curr_res_path, "w") as f:
-        json.dump(results, f)
+            with open(curr_res_path / f"alpha_{alpha}", "w") as f:
+                json.dump(results, f)
 
-    print(f"Results saved to {curr_res_path}")
+            print(f"Results saved to {curr_res_path}")
+
+    else:
+        results = run_all(
+            large_history,
+            clients,
+            machines,
+            run_simple_alg=args.run_simple_alg,
+            log_results=args.log_results
+        )
+
+        with open(curr_res_path, "w") as f:
+            json.dump(results, f)
+
+        print(f"Results saved to {curr_res_path}")
 
 if __name__ == "__main__":
     main()
