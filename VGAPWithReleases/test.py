@@ -12,7 +12,7 @@ from simpleAlgs import FirstFitAlg, BestFitAlg, RandomOrderAlg, WorstFitAlg
 from optAlg import OPTAlg
 
 from parse_raw_data import create_random_test_sample
-from parse_azure_data import process_azure_data
+from parse_azure_data import process_azure_data, process_azure_data_for_learning
 from consts import *
 
 import argparse
@@ -71,13 +71,15 @@ def handle_cls_context(cls, name, *args, log_results=False):
     del instance
     return value
 
-def get_test_sample_from_source(theta, required_time, history_time, pareto_alpha, azure=False, parallel=False):
+def get_test_sample_from_source(theta, required_time, history_time, pareto_alpha, azure=False, parallel=False, learn=False):
     if azure:
+        if learn:
+            return process_azure_data_for_learning(theta, required_time, history_time)
         return process_azure_data(theta, required_time, history_time, pareto_alpha, parallel_time=parallel)
     return create_random_test_sample(theta, required_time, history_time, pareto_alpha)
 
 
-def run_all(large_history, clients, machines, run_simple_alg=False, log_results=False, alpha=None, test=False):
+def run_all(large_history, clients, machines, run_simple_alg=False, log_results=False, alpha=None):
 
 
     history, older_history = large_history.get_latest_from_window(clients.length)
@@ -94,8 +96,6 @@ def run_all(large_history, clients, machines, run_simple_alg=False, log_results=
 
     values[GREEDY_VMKPSD_NAME] = handle_cls_context(GreedyVMKPSD, GREEDY_VMKPSD_NAME, history, machines, clients, alpha, log_results=log_results)
     values[GREEDY_VMKPSD_NO_INFO_NAME] = handle_cls_context(GreedyVMKPSDNoInfo, GREEDY_VMKPSD_NO_INFO_NAME, older_history, machines, clients, alpha, log_results=log_results)
-    if test:
-        return values
 
     # print("calculating simple")
     values[BEST_FIT_NAME] = handle_cls_context(BestFitAlg, BEST_FIT_NAME, machines, clients, log_results=log_results)
@@ -117,6 +117,37 @@ def run_all(large_history, clients, machines, run_simple_alg=False, log_results=
     if log_results:
         print_all_results(values)
 
+    return values
+
+def run_learn_phase(clients, machines, args):
+    print("BLABLA")
+    for hist_artio in TRAIN_HISTORY_VALUES:
+        large_history, clients = get_test_sample_from_source(
+            args.theta,
+            args.required_time_online,
+            hist_artio * args.required_time_online,
+            args.pareto_alpha,
+            args.azure,
+            args.parallel
+        )
+        while large_history is None:
+            print("Sample too small. Retrying...")
+            large_history, clients = get_test_sample_from_source(
+                args.theta,
+                args.required_time_online,
+                hist_artio * args.required_time_online,
+                args.pareto_alpha,
+                args.azure,
+                args.parallel
+            )
+
+        history, older_history = large_history.get_latest_from_window(args.required_time_history)
+        print("OK DOKIE")
+        values = {}
+        for alpha in TRAIN_ALPHA_VALUES:
+            values[f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}_history_{hist_artio}"] = handle_cls_context(GreedyVMKPSD, f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}_history_{hist_artio}", history, machines, clients, alpha)
+            values[f"{GREEDY_VMKPSD_NO_INFO_NAME}_alpha_{alpha}_history_{hist_artio}"] = handle_cls_context(GreedyVMKPSDNoInfo, f"{GREEDY_VMKPSD_NO_INFO_NAME}_alpha_{alpha}_history_{hist_artio}", older_history, machines, clients, alpha)
+        values[OPT_NAME] = handle_cls_context(OPTAlg, OPT_NAME, machines, clients)
     return values
 
 def move_results_to_dir(dir_name):
@@ -201,17 +232,8 @@ def main():
     results_dir.mkdir(exist_ok=True, parents=True)
     curr_res_path = results_dir / f"run_{args.trial}"
 
-    total_history = args.required_time_history + args.required_time_older_history
-    large_history, clients = get_test_sample_from_source(
-        args.theta,
-        args.required_time_online,
-        total_history,
-        args.pareto_alpha,
-        args.azure,
-        args.parallel
-    )
-    while large_history is None:
-        print("Sample too small. Retrying...")
+    if not args.learn_phase:
+        total_history = args.required_time_history + args.required_time_older_history
         large_history, clients = get_test_sample_from_source(
             args.theta,
             args.required_time_online,
@@ -220,8 +242,18 @@ def main():
             args.azure,
             args.parallel
         )
+        while large_history is None:
+            print("Sample too small. Retrying...")
+            large_history, clients = get_test_sample_from_source(
+                args.theta,
+                args.required_time_online,
+                total_history,
+                args.pareto_alpha,
+                args.azure,
+                args.parallel
+            )
 
-    history, older_history = large_history.get_latest_from_window(args.required_time_history)
+        history, older_history = large_history.get_latest_from_window(args.required_time_history)
 
     # Determine number of machines based on load if --load provided
     num_machines = args.num_machines
@@ -257,21 +289,12 @@ def main():
     machines = [Machine([args.machine_size] * args.dimensions) for _ in range(num_machines)]
 
     if args.learn_phase:
-        for alpha in TRAIN_ALPHA_VALUES:
-            results = run_all(
-                large_history,
-                clients,
-                machines,
-                run_simple_alg=args.run_simple_alg,
-                alpha=alpha,
-                log_results=args.log_results,
-                test=True
-            )
+        results = run_learn_phase(clients, machines)
 
-            with open(curr_res_path / f"alpha_{alpha}", "w") as f:
-                json.dump(results, f)
+        with open(curr_res_path , "w") as f:
+            json.dump(results, f)
 
-            print(f"Results saved to {curr_res_path}")
+        print(f"Results saved to {curr_res_path}")
 
     else:
         results = run_all(

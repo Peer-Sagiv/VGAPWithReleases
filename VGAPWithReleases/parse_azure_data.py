@@ -82,7 +82,7 @@ def give_value_by_theta(inst, theta, pareto_alpha):
     inst["value"] = multiplier * (inst['memory'] + inst['ssd'] + inst['core'] + inst['nic']) * inst_d
 
 
-def process_azure_data(theta, required_time, history_time, pareto_alpha, parallel_time=False):
+def process_azure_data(theta, required_time, history_time, pareto_alpha, parallel_time=False, arbitrary_start_azure_time=1.5):
     #if parallel_time and history_time != required_time:
     #    raise ValueError("Parallel can't run with history time different than required time")
     original_required_time = required_time
@@ -95,7 +95,6 @@ def process_azure_data(theta, required_time, history_time, pareto_alpha, paralle
     else:
         base_time = AZURE_TIME_INTERVAL_DAYS / AZURE_TIME_INTERVAL
 
-    arbitrary_start_azure_time = 1.5
     three_hours_azure_time = 3 / 24.0
 
     arbitrary_start_in_intervals = arbitrary_start_azure_time / AZURE_TIME_INTERVAL
@@ -137,3 +136,7 @@ def process_azure_data(theta, required_time, history_time, pareto_alpha, paralle
     clients = post_process_entry(second_interval_values, original_required_time, theta, pareto_alpha)
 
     return TimeWindow(history, history_start // AZURE_TIME_INTERVAL, history_end // AZURE_TIME_INTERVAL, 1), TimeWindow(clients, online_start // AZURE_TIME_INTERVAL, online_end // AZURE_TIME_INTERVAL, 1)
+
+
+def process_azure_data_for_learning(theta, required_time, history_time):
+    return process_azure_data(theta, required_time, history_time, arbitrary_start_azure_time=5)
