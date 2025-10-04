@@ -119,13 +119,14 @@ def run_all(large_history, clients, machines, run_simple_alg=False, log_results=
 
     return values
 
-def run_learn_phase(clients, machines, args):
-    print("BLABLA")
-    for hist_artio in TRAIN_HISTORY_VALUES:
+def run_learn_phase(args):
+    machines = [Machine([args.machine_size] * args.dimensions) for _ in range(args.num_machines)]
+    for hist_ratio in TRAIN_HISTORY_VALUES:
+        total_history = args.required_time_online + hist_ratio * args.required_time_online
         large_history, clients = get_test_sample_from_source(
             args.theta,
             args.required_time_online,
-            hist_artio * args.required_time_online,
+            total_history,
             args.pareto_alpha,
             args.azure,
             args.parallel
@@ -135,18 +136,17 @@ def run_learn_phase(clients, machines, args):
             large_history, clients = get_test_sample_from_source(
                 args.theta,
                 args.required_time_online,
-                hist_artio * args.required_time_online,
+                total_history,
                 args.pareto_alpha,
                 args.azure,
                 args.parallel
             )
 
-        history, older_history = large_history.get_latest_from_window(args.required_time_history)
-        print("OK DOKIE")
+        history, older_history = large_history.get_latest_from_window(hist_ratio * args.required_time_online)
         values = {}
         for alpha in TRAIN_ALPHA_VALUES:
-            values[f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}_history_{hist_artio}"] = handle_cls_context(GreedyVMKPSD, f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}_history_{hist_artio}", history, machines, clients, alpha)
-            values[f"{GREEDY_VMKPSD_NO_INFO_NAME}_alpha_{alpha}_history_{hist_artio}"] = handle_cls_context(GreedyVMKPSDNoInfo, f"{GREEDY_VMKPSD_NO_INFO_NAME}_alpha_{alpha}_history_{hist_artio}", older_history, machines, clients, alpha)
+            values[f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}_history_{hist_ratio}"] = handle_cls_context(GreedyVMKPSD, f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}_history_{hist_ratio}", history, machines, clients, alpha)
+            values[f"{GREEDY_VMKPSD_NO_INFO_NAME}_alpha_{alpha}_history_{hist_ratio}"] = handle_cls_context(GreedyVMKPSDNoInfo, f"{GREEDY_VMKPSD_NO_INFO_NAME}_alpha_{alpha}_history_{hist_ratio}", older_history, machines, clients, alpha)
         values[OPT_NAME] = handle_cls_context(OPTAlg, OPT_NAME, machines, clients)
     return values
 
@@ -255,41 +255,41 @@ def main():
 
         history, older_history = large_history.get_latest_from_window(args.required_time_history)
 
-    # Determine number of machines based on load if --load provided
-    num_machines = args.num_machines
-    if args.load is not None:
-        # Compute peak load from clients in the history window
+        # Determine number of machines based on load if --load provided
+        num_machines = args.num_machines
+        if args.load is not None:
+            # Compute peak load from clients in the history window
 
-        print("max_demands=", clients.get_max_total_demand())
-        print("avg_demands=", clients.get_avg_demand())
-        max_demand = max(clients.get_max_total_demand())
-        avg_demand = max(clients.get_avg_demand())
-        print("max_demand=", max_demand)
-        print("avg_demand=", avg_demand)
+            print("max_demands=", clients.get_max_total_demand())
+            print("avg_demands=", clients.get_avg_demand())
+            max_demand = max(clients.get_max_total_demand())
+            avg_demand = max(clients.get_avg_demand())
+            print("max_demand=", max_demand)
+            print("avg_demand=", avg_demand)
 
-        # Compute required machines to get requested load
-        required_machines_max_demand = math.floor(max_demand / (args.machine_size * args.load))
-        required_machines_avg_demand = math.floor(avg_demand / (args.machine_size * args.load))
-
-
-        print("required_machines_max_demand=", required_machines_max_demand)
-        print("required_machines_avg_demand=", required_machines_avg_demand)
+            # Compute required machines to get requested load
+            required_machines_max_demand = math.floor(max_demand / (args.machine_size * args.load))
+            required_machines_avg_demand = math.floor(avg_demand / (args.machine_size * args.load))
 
 
-        required_machines = required_machines_avg_demand
+            print("required_machines_max_demand=", required_machines_max_demand)
+            print("required_machines_avg_demand=", required_machines_avg_demand)
 
-        if required_machines < 1:
-            required_machines = 1  # At least one machine needed
 
-        num_machines = required_machines
+            required_machines = required_machines_avg_demand
 
-        print(f"Computed number of machines needed for load {args.load}: {num_machines}")
+            if required_machines < 1:
+                required_machines = 1  # At least one machine needed
 
-    # Create machines using final num_machines
-    machines = [Machine([args.machine_size] * args.dimensions) for _ in range(num_machines)]
+            num_machines = required_machines
+
+            print(f"Computed number of machines needed for load {args.load}: {num_machines}")
+
+        # Create machines using final num_machines
+        machines = [Machine([args.machine_size] * args.dimensions) for _ in range(num_machines)]
 
     if args.learn_phase:
-        results = run_learn_phase(clients, machines)
+        results = run_learn_phase(args)
 
         with open(curr_res_path , "w") as f:
             json.dump(results, f)
