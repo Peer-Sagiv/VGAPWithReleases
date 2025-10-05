@@ -273,7 +273,7 @@ class GreedyVMKPSD(VGAPWD):
 class GreedyVMKPSDNoInfo(GreedyVMKPSD):
     def _pre_process_data(self):
         releveant_dim = 0
-        free_capacity = self._max_time * sum(s.capacity(releveant_dim) for s in self._machines) * self._alpha
+        free_capacity = self._max_time * sum(s.capacity(releveant_dim) for s in self._machines)
         self._history_set.sort(key=self._sort_func,reverse=True)
         self._rate_threshold = 0
         for c in self._history_set:

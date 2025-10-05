@@ -82,7 +82,7 @@ def give_value_by_theta(inst, theta, pareto_alpha):
     inst["value"] = multiplier * (inst['memory'] + inst['ssd'] + inst['core'] + inst['nic']) * inst_d
 
 
-def process_azure_data(theta, required_time, history_time, pareto_alpha, parallel_time=False, arbitrary_start_azure_time=1.5):
+def process_azure_data(theta, required_time, history_time, pareto_alpha, parallel_time=False, arbitrary_start_azure_time=10):
     #if parallel_time and history_time != required_time:
     #    raise ValueError("Parallel can't run with history time different than required time")
     original_required_time = required_time
@@ -139,4 +139,4 @@ def process_azure_data(theta, required_time, history_time, pareto_alpha, paralle
 
 
 def process_azure_data_for_learning(theta, required_time, history_time):
-    return process_azure_data(theta, required_time, history_time, arbitrary_start_azure_time=5)
+    return process_azure_data(theta, required_time, history_time, arbitrary_start_azure_time=3)

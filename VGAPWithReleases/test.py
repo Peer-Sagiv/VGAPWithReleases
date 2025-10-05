@@ -95,7 +95,7 @@ def run_all(large_history, clients, machines, run_simple_alg=False, log_results=
         values[GREEDY_VGAPWD_NAME] = handle_cls_context(GreedyVGAPWD, GREEDY_VGAPWD_NAME, history, machines, clients, alpha, log_results=log_results)
 
     values[GREEDY_VMKPSD_NAME] = handle_cls_context(GreedyVMKPSD, GREEDY_VMKPSD_NAME, history, machines, clients, alpha, log_results=log_results)
-    values[GREEDY_VMKPSD_NO_INFO_NAME] = handle_cls_context(GreedyVMKPSDNoInfo, GREEDY_VMKPSD_NO_INFO_NAME, older_history, machines, clients, alpha, log_results=log_results)
+    values[GREEDY_VMKPSD_NO_INFO_NAME] = handle_cls_context(GreedyVMKPSDNoInfo, GREEDY_VMKPSD_NO_INFO_NAME, older_history, machines, clients, 1, log_results=log_results)
 
     # print("calculating simple")
     values[BEST_FIT_NAME] = handle_cls_context(BestFitAlg, BEST_FIT_NAME, machines, clients, log_results=log_results)
@@ -105,9 +105,9 @@ def run_all(large_history, clients, machines, run_simple_alg=False, log_results=
 
     # print("calculating OKPD")
     values[WCO_NAME] = handle_cls_context(WCOAlg, WCO_NAME, machines, clients, log_results=log_results)
-    values[GREEDY_NAME] = handle_cls_context(GreedyAlg, GREEDY_NAME, machines, clients, log_results=log_results)
-    values[DESIGN_1_NAME] = handle_cls_context(Design1Alg, DESIGN_1_NAME, machines, clients, log_results=log_results)
-    values[DESIGN_2_NAME] = handle_cls_context(Design2Alg, DESIGN_2_NAME, machines, clients, log_results=log_results)
+    # values[GREEDY_NAME] = handle_cls_context(GreedyAlg, GREEDY_NAME, machines, clients, log_results=log_results)
+    # values[DESIGN_1_NAME] = handle_cls_context(Design1Alg, DESIGN_1_NAME, machines, clients, log_results=log_results)
+    # values[DESIGN_2_NAME] = handle_cls_context(Design2Alg, DESIGN_2_NAME, machines, clients, log_results=log_results)
     values[DATA_DRIVEN_NAME] = handle_cls_context(DataDrivenAlg, DATA_DRIVEN_NAME, machines, clients, history, log_results=log_results)
     values[GAMMA_OFFLINE_NAME] = handle_cls_context(GammaOfflineAlg, GAMMA_OFFLINE_NAME, machines, clients, history, log_results=log_results)
 
@@ -121,8 +121,18 @@ def run_all(large_history, clients, machines, run_simple_alg=False, log_results=
 
 def run_learn_phase(args):
     machines = [Machine([args.machine_size] * args.dimensions) for _ in range(args.num_machines)]
-    for hist_ratio in TRAIN_HISTORY_VALUES:
-        total_history = args.required_time_online + hist_ratio * args.required_time_online
+    values = {}
+    total_history = int(args.required_time_online + max(TRAIN_HISTORY_VALUES) * args.required_time_online)
+    large_history, clients = get_test_sample_from_source(
+        args.theta,
+        args.required_time_online,
+        total_history,
+        args.pareto_alpha,
+        args.azure,
+        args.parallel
+    )
+    while large_history is None:
+        print("Sample too small. Retrying...")
         large_history, clients = get_test_sample_from_source(
             args.theta,
             args.required_time_online,
@@ -131,23 +141,14 @@ def run_learn_phase(args):
             args.azure,
             args.parallel
         )
-        while large_history is None:
-            print("Sample too small. Retrying...")
-            large_history, clients = get_test_sample_from_source(
-                args.theta,
-                args.required_time_online,
-                total_history,
-                args.pareto_alpha,
-                args.azure,
-                args.parallel
-            )
 
-        history, older_history = large_history.get_latest_from_window(hist_ratio * args.required_time_online)
-        values = {}
-        for alpha in TRAIN_ALPHA_VALUES:
-            values[f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}_history_{hist_ratio}"] = handle_cls_context(GreedyVMKPSD, f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}_history_{hist_ratio}", history, machines, clients, alpha)
-            values[f"{GREEDY_VMKPSD_NO_INFO_NAME}_alpha_{alpha}_history_{hist_ratio}"] = handle_cls_context(GreedyVMKPSDNoInfo, f"{GREEDY_VMKPSD_NO_INFO_NAME}_alpha_{alpha}_history_{hist_ratio}", older_history, machines, clients, alpha)
-        values[OPT_NAME] = handle_cls_context(OPTAlg, OPT_NAME, machines, clients)
+    for hist_ratio in TRAIN_HISTORY_VALUES:
+        history, older_history = large_history.get_latest_from_window(int(total_history - hist_ratio * args.required_time_online))
+        values[f"{GREEDY_VMKPSD_NO_INFO_NAME}_history_{hist_ratio}"] = handle_cls_context(GreedyVMKPSDNoInfo, f"{GREEDY_VMKPSD_NO_INFO_NAME}_history_{hist_ratio}", older_history, machines, clients, alpha)
+    history, older_history = large_history.get_latest_from_window(args.required_time_online)
+    for alpha in TRAIN_ALPHA_VALUES:
+        values[f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}"] = handle_cls_context(GreedyVMKPSD, f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}", history, machines, clients, alpha)
+    values[OPT_NAME] = handle_cls_context(OPTAlg, OPT_NAME, machines, clients)
     return values
 
 def move_results_to_dir(dir_name):

@@ -41,8 +41,8 @@ ALGS_NAMES = [GREEDY_VGAPWD_NAME, GREEDY_VMKPSD_NAME, VGAPWD_NAME, VMKPSD_NAME, 
               GAMMA_OFFLINE_NAME, OPT_NAME, GREEDY_VMKPSD_NO_INFO_NAME]
 
 TRAIN_ALPHA_VALUES = [0.1 * i for i in range(11)]
-TRAIN_HISTORY_VALUES = [1 + 0.1 * i for i in range(11)]
+TRAIN_HISTORY_VALUES = [1 + 0.2 * i for i in range(21)]
 for alpha in TRAIN_ALPHA_VALUES:
-    for hist_ration in TRAIN_HISTORY_VALUES:
-        ALGS_NAMES.append(f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}_history_{hist_ration}")
-        ALGS_NAMES.append(f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}_history_{hist_ration}")
+        ALGS_NAMES.append(f"{GREEDY_VMKPSD_NAME}_alpha_{alpha}")
+for hist_ratio in TRAIN_HISTORY_VALUES:
+    ALGS_NAMES.append(f"{GREEDY_VMKPSD_NO_INFO_NAME}_history_{hist_ratio}")
